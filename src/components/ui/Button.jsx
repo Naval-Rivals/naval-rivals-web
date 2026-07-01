@@ -7,12 +7,11 @@ function Button({
   ...props
 }) {
   const variants = {
-    primary:
-      "bg-orange-500 hover:bg-orange-600 text-white border-orange-400",
+    primary: "bg-orange-500 hover:bg-orange-600 text-white border-orange-400",
     secondary:
       "bg-transparent hover:bg-white/10 text-orange-300 border-orange-300",
-    ghost:
-      "bg-transparent hover:bg-white/10 text-white border-transparent",
+    ghost: "bg-transparent hover:bg-white/10 text-white border-transparent",
+    danger: "bg-transparent hover:bg-white/10 text-red-500",
   };
 
   return (
