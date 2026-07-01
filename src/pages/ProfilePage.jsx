@@ -4,17 +4,18 @@ import Card from "../components/ui/Card";
 import { useNavigate } from "react-router";
 import Button from "../components/ui/Button";
 import Header from "../components/layout/Header";
+import BottomNav from "../components/layout/BottomNav";
 
 function ProfilePage() {
   const navigate = useNavigate();
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
-      <LayoutPage interClassName="p-4">
+      <LayoutPage interClassName="p-4 pb-20 md:pb-4">
         <Card className="flex gap-6 flex-col w-full p-6">
           <div className="flex w-full items-center gap-4">
             <div className="rounded-full p-2 bg-blue-dark-900 border-2 border-orange-400 ">
-              <CircleUserRound className="text-orange-300 w-16 h-16" />
+              <CircleUserRound className="text-orange-300 w-12 h-12" />
             </div>
             <div className="flex flex-col gap-0.5">
               <h1 className="text-white font-poppins font-semibold text-2xl">
@@ -48,6 +49,7 @@ function ProfilePage() {
           </div>
         </Card>
       </LayoutPage>
+      <BottomNav />
     </div>
   );
 }

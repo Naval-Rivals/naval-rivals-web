@@ -4,6 +4,7 @@ import LoginPage from "../pages/LoginPage";
 import HomePage from "../pages/HomePage";
 import ProfilePage from "../pages/ProfilePage";
 import MyAccountPage from "../pages/MyAccountPage";
+import RankingPage from "../pages/RankingPage";
 
 function AppRoutes() {
   return (
@@ -14,6 +15,7 @@ function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/profile/my-account" element={<MyAccountPage />} />
+        <Route path="/ranking" element={<RankingPage />} />
       </Routes>
     </BrowserRouter>
   );

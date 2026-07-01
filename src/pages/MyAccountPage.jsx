@@ -1,6 +1,7 @@
 import { ArrowLeft, Save } from "lucide-react";
 import Header from "../components/layout/Header";
 import LayoutPage from "../components/layout/LayoutPage";
+import BottomNav from "../components/layout/BottomNav";
 import { useNavigate } from "react-router";
 import Card from "../components/ui/Card";
 import Label from "../components/ui/Label";
@@ -13,7 +14,7 @@ function MyAccountPage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
-      <LayoutPage className="p-2">
+      <LayoutPage className="p-2 pb-20 md:pb-2">
         <div className="flex flex-col w-full gap-4">
           <button
             onClick={() => navigate("/profile")}
@@ -113,6 +114,7 @@ function MyAccountPage() {
           </form>
         </div>
       </LayoutPage>
+      <BottomNav />
     </div>
   );
 }

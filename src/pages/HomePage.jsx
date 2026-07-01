@@ -1,5 +1,6 @@
 import Header from "../components/layout/Header";
 import LayoutPage from "../components/layout/LayoutPage";
+import BottomNav from "../components/layout/BottomNav";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import SectionTitle from "../components/ui/SectionTitle";
@@ -25,7 +26,7 @@ function HomePage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
-      <LayoutPage interClassName="p-4 pb-8">
+      <LayoutPage interClassName="p-4 pb-20 md:pb-8">
         <Card className="flex flex-col items-center gap-6 w-full p-6">
           <div className="flex flex-col items-center gap-2">
             <div className="w-24 shadow-md rounded-2xl shadow-orange-500">
@@ -143,6 +144,7 @@ function HomePage() {
         </Card>
         <Footer />
       </LayoutPage>
+      <BottomNav />
     </div>
   );
 }
