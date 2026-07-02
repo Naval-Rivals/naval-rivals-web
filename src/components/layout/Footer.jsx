@@ -13,7 +13,7 @@ function Footer() {
           Sobre o Naval Rivals
         </Link>
         <Link
-          to="/game-rules"
+          to="/game/rules"
           className="flex items-center gap-1.5 font-poppins text-sm text-white/60 hover:text-orange-300 transition-colors duration-200"
         >
           <ScrollText size={16} />
@@ -31,7 +31,8 @@ function Footer() {
       </div>
 
       <span className="font-poppins text-[10px] text-white/20">
-        &copy; {new Date().getFullYear()} Naval Rivals. Todos os direitos reservados.
+        &copy; {new Date().getFullYear()} Naval Rivals. Todos os direitos
+        reservados.
       </span>
     </footer>
   );

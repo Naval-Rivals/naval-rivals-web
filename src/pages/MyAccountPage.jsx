@@ -8,6 +8,7 @@ import Label from "../components/ui/Label";
 import Input from "../components/ui/Input";
 import ErrorField from "../components/ui/ErrorField";
 import Button from "../components/ui/Button";
+import Footer from "../components/layout/Footer";
 
 function MyAccountPage() {
   const navigate = useNavigate();
@@ -113,6 +114,7 @@ function MyAccountPage() {
             </Card>
           </form>
         </div>
+        <Footer />
       </LayoutPage>
       <BottomNav />
     </div>

@@ -6,11 +6,13 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import { Swords, LogIn, Users, Anchor } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import logo from "../assets/logo-naval-rivals.png";
 import Footer from "../components/layout/Footer";
 
 function HomePage() {
   const [roomCode, setRoomCode] = useState("");
+  const navigate = useNavigate();
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -40,6 +42,7 @@ function HomePage() {
             <Button
               variant="primary"
               className="flex items-center justify-center gap-2"
+              onClick={() => navigate("/game/waiting-room")}
             >
               <Swords size={18} />
               CRIAR BATALHA
