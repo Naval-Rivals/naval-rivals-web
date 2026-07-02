@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import Button from "../components/ui/Button";
 import Header from "../components/layout/Header";
 import BottomNav from "../components/layout/BottomNav";
+import Footer from "../components/layout/Footer";
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -48,6 +49,7 @@ function ProfilePage() {
             </Button>
           </div>
         </Card>
+        <Footer />
       </LayoutPage>
       <BottomNav />
     </div>

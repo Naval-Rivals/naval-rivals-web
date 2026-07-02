@@ -4,6 +4,7 @@ import LayoutPage from "../components/layout/LayoutPage";
 import BottomNav from "../components/layout/BottomNav";
 import Card from "../components/ui/Card";
 import { MedalIcon } from "@phosphor-icons/react";
+import Footer from "../components/layout/Footer";
 
 const rankingData = [
   { position: 1, name: "CommanderX", victories: 312, winRate: "87%" },
@@ -109,6 +110,7 @@ function RankingPage() {
             ))}
           </div>
         </Card>
+        <Footer />
       </LayoutPage>
       <BottomNav />
     </div>
