@@ -12,7 +12,6 @@ function GameRulesPage() {
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
       <LayoutPage interClassName="p-4 pb-20 md:pb-8">
-        {/* Header da página */}
         <div className="flex flex-col items-center gap-2 pt-4 pb-2 w-full">
           <div className="flex items-center justify-center w-14 h-14 rounded-full bg-blue-dark-900 border-2 border-orange-300/50">
             <BookOpen size={28} className="text-orange-300" />
@@ -25,7 +24,6 @@ function GameRulesPage() {
           </p>
         </div>
 
-        {/* Regras principais */}
         <Card className="flex flex-col gap-5 w-full p-6">
           <div className="flex items-center gap-3">
             <Ship size={22} className="text-blue-300 shrink-0" />
