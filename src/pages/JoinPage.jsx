@@ -26,7 +26,7 @@ function JoinPage() {
       try {
         const room = await api.post("/rooms/join", { code: code.toUpperCase() });
         if (room.gameId) {
-          navigate("/game/ship-placement", { state: { gameId: room.gameId, roomId: room.id }, replace: true });
+          navigate("/game/ship-placement", { state: { gameId: room.gameId, roomId: room.id, opponentNickname: room.host?.nickname }, replace: true });
         } else {
           navigate("/game/waiting-room", { state: { room }, replace: true });
         }

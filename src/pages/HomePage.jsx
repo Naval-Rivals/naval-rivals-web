@@ -56,7 +56,7 @@ function HomePage() {
       const room = await api.post("/rooms/join", { code });
       // If room already has a gameId (FULL status), go directly to ship placement
       if (room.gameId) {
-        navigate("/game/ship-placement", { state: { gameId: room.gameId, roomId: room.id } });
+        navigate("/game/ship-placement", { state: { gameId: room.gameId, roomId: room.id, opponentNickname: room.host?.nickname } });
       } else {
         navigate("/game/waiting-room", { state: { room } });
       }

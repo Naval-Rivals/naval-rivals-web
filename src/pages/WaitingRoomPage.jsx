@@ -9,6 +9,7 @@ import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { ws } from "../services/websocket";
+import ModalConfirmation from "../components/ui/ModalConfirmation";
 
 function WaitingRoomPage() {
   const navigate = useNavigate();
@@ -17,8 +18,10 @@ function WaitingRoomPage() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [opponent, setOpponent] = useState(null);
   const subscriptionRef = useRef(null);
+  const opponentRef = useRef(null);
 
   const room = location.state?.room;
 
@@ -63,11 +66,12 @@ function WaitingRoomPage() {
     switch (event.event) {
       case "PLAYER_JOINED":
         setOpponent({ id: event.userId, nickname: event.nickname });
+        opponentRef.current = event.nickname;
         break;
       case "ROOM_READY":
         // Both players are in, game created. Navigate to ship placement.
         navigate("/game/ship-placement", {
-          state: { gameId: event.gameId, roomId: room.id },
+          state: { gameId: event.gameId, roomId: room.id, opponentNickname: event.nickname || opponentRef.current },
           replace: true,
         });
         break;
@@ -105,7 +109,17 @@ function WaitingRoomPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <Header />
+      {showCancelModal && (
+        <ModalConfirmation
+          title="Cancelar Batalha"
+          description="Tem certeza que deseja cancelar? A sala será encerrada."
+          confirmText="Cancelar Batalha"
+          variant="danger"
+          handleConfirm={handleCancel}
+          handleCancel={() => setShowCancelModal(false)}
+        />
+      )}
+      <Header minimal />
       <LayoutPage interClassName="p-4 justify-center">
         <Card className="flex flex-col items-center gap-6 w-full max-w-lg p-6">
           <div className="flex flex-col items-center gap-3">
@@ -236,7 +250,7 @@ function WaitingRoomPage() {
           <Button
             variant="danger"
             className="flex items-center justify-center gap-2 border-red-500/50!"
-            onClick={handleCancel}
+            onClick={() => setShowCancelModal(true)}
             disabled={canceling}
           >
             {canceling ? (

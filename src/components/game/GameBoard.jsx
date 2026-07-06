@@ -1,4 +1,5 @@
 import ShipSvg from "./ShipSvg";
+import { Skull } from "lucide-react";
 
 const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 const ROWS = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -24,9 +25,9 @@ const CELL_STYLES = {
 const CELL_INDICATORS = {
   empty: null,
   ship: null, // Ship SVG handles this now
-  hit: <div className="w-4 h-4 rounded-full bg-orange-400 shadow-md shadow-orange-400/50" />,
-  miss: <div className="w-2 h-2 rounded-full bg-white/40" />,
-  sunk: null, // Ship SVG handles this
+  hit: <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="4" fill="#fb923c" /><line x1="9" y1="1" x2="9" y2="4" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" /><line x1="9" y1="14" x2="9" y2="17" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" /><line x1="1" y1="9" x2="4" y2="9" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" /><line x1="14" y1="9" x2="17" y2="9" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" /><line x1="3.5" y1="3.5" x2="5.5" y2="5.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" /><line x1="12.5" y1="12.5" x2="14.5" y2="14.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" /><line x1="14.5" y1="3.5" x2="12.5" y2="5.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" /><line x1="5.5" y1="12.5" x2="3.5" y2="14.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" /></svg>,
+  miss: <svg width="12" height="12" viewBox="0 0 12 12" className="opacity-50"><line x1="2" y1="2" x2="10" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round" /><line x1="10" y1="2" x2="2" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round" /></svg>,
+  sunk: null, // Skull is rendered on the ShipOverlay
 };
 
 /**
@@ -140,10 +141,14 @@ function ShipOverlay({ ship }) {
   // Color based on state
   const color = ship.sunk ? "#f87171" : "#4ade80"; // red-400 : green-400
 
+  // Calculate ship dimensions for centering skull
+  const shipWidth = orientation === "horizontal" ? size * CELL_SIZE : CELL_SIZE;
+  const shipHeight = orientation === "horizontal" ? CELL_SIZE : size * CELL_SIZE;
+
   return (
     <div
       className="absolute pointer-events-none"
-      style={{ left: `${left}px`, top: `${top}px` }}
+      style={{ left: `${left}px`, top: `${top}px`, width: `${shipWidth}px`, height: `${shipHeight}px` }}
     >
       <ShipSvg
         size={size}
@@ -151,6 +156,11 @@ function ShipOverlay({ ship }) {
         color={color}
         cellSize={CELL_SIZE}
       />
+      {ship.sunk && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Skull size={24} className="text-red-400 drop-shadow-[0_0_4px_rgba(248,113,113,0.8)]" />
+        </div>
+      )}
     </div>
   );
 }

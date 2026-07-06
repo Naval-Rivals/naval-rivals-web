@@ -1,6 +1,7 @@
 /**
  * ShipSvg - Componente SVG genérico de navio visto de cima.
- * Formato cápsula/submarino com proa arredondada e popa achatada.
+ * Casco afilado na proa (ponta real) e popa com "espelho de popa" reto.
+ * Inclui ponte de comando, chaminé e (em navios maiores) canhão de proa.
  * Escala automaticamente para o número de células.
  *
  * Props:
@@ -17,7 +18,6 @@ function ShipSvg({
   className = "",
   cellSize = 33,
 }) {
-  // Dimensions based on orientation
   const length = cellSize * size;
   const width = cellSize;
   const isVertical = orientation === "vertical";
@@ -25,15 +25,14 @@ function ShipSvg({
   const svgWidth = isVertical ? width : length;
   const svgHeight = isVertical ? length : width;
 
-  // Padding inside the cell
   const pad = 4;
-  const bodyWidth = width - pad * 2;
-  const bodyLength = length - pad * 2;
+  const bodyWidth = width - pad * 2; // espessura do casco (eixo curto)
+  const bodyLength = length - pad * 2; // comprimento do casco (eixo longo)
 
-  // Radius for the bow (front) - more pointed
-  const bowRadius = bodyWidth / 2;
-  // Radius for the stern (back) - slightly rounded
-  const sternRadius = bodyWidth / 4;
+  // Proa (ponta) mais comprida, popa mais curta - proporcional à espessura
+  // do casco, mas limitada para não ficar exagerada em navios grandes.
+  const bowTaper = Math.min(bodyLength * 0.32, bodyWidth * 1.7);
+  const sternTaper = Math.min(bodyLength * 0.14, bodyWidth * 0.55);
 
   return (
     <svg
@@ -47,12 +46,10 @@ function ShipSvg({
         <VerticalShip
           bodyWidth={bodyWidth}
           bodyLength={bodyLength}
-          bowRadius={bowRadius}
-          sternRadius={sternRadius}
+          bowTaper={bowTaper}
+          sternTaper={sternTaper}
           pad={pad}
           color={color}
-          svgWidth={svgWidth}
-          svgHeight={svgHeight}
           size={size}
           cellSize={cellSize}
         />
@@ -60,12 +57,10 @@ function ShipSvg({
         <HorizontalShip
           bodyWidth={bodyWidth}
           bodyLength={bodyLength}
-          bowRadius={bowRadius}
-          sternRadius={sternRadius}
+          bowTaper={bowTaper}
+          sternTaper={sternTaper}
           pad={pad}
           color={color}
-          svgWidth={svgWidth}
-          svgHeight={svgHeight}
           size={size}
           cellSize={cellSize}
         />
@@ -74,142 +69,272 @@ function ShipSvg({
   );
 }
 
-function HorizontalShip({ bodyWidth, bodyLength, bowRadius, sternRadius, pad, color, svgWidth, svgHeight, size, cellSize }) {
+function HorizontalShip({
+  bodyWidth,
+  bodyLength,
+  bowTaper,
+  sternTaper,
+  pad,
+  color,
+  size,
+  cellSize,
+}) {
   const cx = pad;
   const cy = pad;
-  const h = bodyWidth;
-  const w = bodyLength;
+  const h = bodyWidth; // eixo curto (largura do casco)
+  const w = bodyLength; // eixo longo (proa à direita)
 
-  // Ship hull path - pointed bow (right), rounded stern (left)
-  const path = `
-    M ${cx + sternRadius} ${cy}
-    L ${cx + w - bowRadius} ${cy}
-    Q ${cx + w} ${cy} ${cx + w} ${cy + h / 2}
-    Q ${cx + w} ${cy + h} ${cx + w - bowRadius} ${cy + h}
-    L ${cx + sternRadius} ${cy + h}
-    Q ${cx} ${cy + h} ${cx} ${cy + h - sternRadius}
-    L ${cx} ${cy + sternRadius}
-    Q ${cx} ${cy} ${cx + sternRadius} ${cy}
+  const midY = cy + h / 2;
+
+  // Casco: popa (esquerda) com espelho reto e cantos suavizados,
+  // corpo reto no meio, proa (direita) afilando até uma ponta real.
+  const hullPath = `
+    M ${cx + sternTaper} ${cy}
+    L ${cx + w - bowTaper} ${cy}
+    Q ${cx + w - bowTaper * 0.35} ${cy} ${cx + w} ${midY}
+    Q ${cx + w - bowTaper * 0.35} ${cy + h} ${cx + w - bowTaper} ${cy + h}
+    L ${cx + sternTaper} ${cy + h}
+    Q ${cx} ${cy + h} ${cx} ${cy + h - sternTaper}
+    L ${cx} ${cy + sternTaper}
+    Q ${cx} ${cy} ${cx + sternTaper} ${cy}
     Z
   `;
 
-  // Deck line (center line)
-  const deckY = cy + h / 2;
-  const deckX1 = cx + sternRadius + 2;
-  const deckX2 = cx + w - bowRadius - 2;
+  // Ponte de comando: posicionada por volta de ~38% do comprimento
+  // (a partir da popa), sempre dentro do trecho reto do casco.
+  const bridgeLen = Math.min(cellSize * 0.42, w * 0.22);
+  const bridgeW = h * 0.6;
+  const straightStart = cx + sternTaper + 2;
+  const straightEnd = cx + w - bowTaper - 2;
+  const bridgeX = Math.min(
+    straightStart + (straightEnd - straightStart) * 0.34,
+    straightEnd - bridgeLen,
+  );
+  const bridgeY = midY - bridgeW / 2;
 
-  // Bridge/cabin position (roughly 30% from stern)
-  const bridgeX = cx + w * 0.25;
-  const bridgeW = cellSize * 0.5;
-  const bridgeH = h * 0.5;
-  const bridgeY = cy + (h - bridgeH) / 2;
+  // Chaminé: logo atrás (a ré) da ponte
+  const funnelR = cellSize * 0.11;
+  const funnelX = Math.max(bridgeX - funnelR * 2.2, straightStart + funnelR);
+
+  // Canhão de proa: em navios de 3+ células, entre a ponte e a proa
+  const showBowGun = size >= 3;
+  const gunX =
+    bridgeX + bridgeLen + (straightEnd - (bridgeX + bridgeLen)) * 0.55;
+  const gunR = cellSize * 0.09;
 
   return (
     <g>
-      {/* Hull */}
-      <path d={path} fill={color} opacity={0.3} />
-      <path d={path} fill="none" stroke={color} strokeWidth={1.5} />
-
-      {/* Center deck line */}
-      <line
-        x1={deckX1}
-        y1={deckY}
-        x2={deckX2}
-        y2={deckY}
+      {/* Casco */}
+      <path d={hullPath} fill={color} opacity={0.28} />
+      <path
+        d={hullPath}
+        fill="none"
         stroke={color}
-        strokeWidth={0.8}
-        opacity={0.5}
-        strokeDasharray="3 2"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
       />
 
-      {/* Bridge/cabin */}
+      {/* Chaminé */}
+      <circle cx={funnelX} cy={midY} r={funnelR} fill={color} opacity={0.55} />
+
+      {/* Ponte de comando */}
       <rect
         x={bridgeX}
         y={bridgeY}
-        width={bridgeW}
-        height={bridgeH}
-        rx={3}
+        width={bridgeLen}
+        height={bridgeW}
+        rx={2.5}
         fill={color}
-        opacity={0.4}
+        opacity={0.55}
+        stroke={color}
+        strokeWidth={0.6}
+      />
+      {/* Vigias/janelas da ponte */}
+      <rect
+        x={bridgeX + bridgeLen * 0.2}
+        y={bridgeY + bridgeW * 0.28}
+        width={bridgeLen * 0.6}
+        height={bridgeW * 0.16}
+        fill="white"
+        opacity={0.35}
       />
 
-      {/* Bow detail (small triangle) */}
+      {/* Canhão de proa (navios grandes) - torreta com canos */}
+      {showBowGun && (
+        <g>
+          {/* Base da torreta */}
+          <circle
+            cx={gunX}
+            cy={midY}
+            r={gunR * 1.6}
+            fill={color}
+            opacity={0.5}
+            stroke={color}
+            strokeWidth={0.7}
+          />
+          {/* Cano superior */}
+          <rect
+            x={gunX}
+            y={midY - gunR * 1.4}
+            width={bowTaper * 0.3}
+            height={gunR}
+            rx={0.8}
+            fill={color}
+            opacity={0.7}
+          />
+          {/* Cano inferior */}
+          <rect
+            x={gunX}
+            y={midY + gunR * 0.4}
+            width={bowTaper * 0.3}
+            height={gunR}
+            rx={0.8}
+            fill={color}
+            opacity={0.7}
+          />
+        </g>
+      )}
+
+      {/* Ponta da proa em destaque */}
       <circle
-        cx={cx + w - bowRadius * 0.5}
-        cy={cy + h / 2}
-        r={2}
+        cx={cx + w - bowTaper * 0.15}
+        cy={midY}
+        r={1.6}
         fill={color}
-        opacity={0.6}
+        opacity={0.7}
       />
     </g>
   );
 }
 
-function VerticalShip({ bodyWidth, bodyLength, bowRadius, sternRadius, pad, color, svgWidth, svgHeight, size, cellSize }) {
+function VerticalShip({
+  bodyWidth,
+  bodyLength,
+  bowTaper,
+  sternTaper,
+  pad,
+  color,
+  size,
+  cellSize,
+}) {
   const cx = pad;
   const cy = pad;
-  const w = bodyWidth;
-  const h = bodyLength;
+  const w = bodyWidth; // eixo curto (largura do casco)
+  const h = bodyLength; // eixo longo (proa embaixo)
 
-  // Ship hull path - pointed bow (bottom), rounded stern (top)
-  const path = `
-    M ${cx} ${cy + sternRadius}
-    Q ${cx} ${cy} ${cx + sternRadius} ${cy}
-    L ${cx + w - sternRadius} ${cy}
-    Q ${cx + w} ${cy} ${cx + w} ${cy + sternRadius}
-    L ${cx + w} ${cy + h - bowRadius}
-    Q ${cx + w} ${cy + h} ${cx + w / 2} ${cy + h}
-    Q ${cx} ${cy + h} ${cx} ${cy + h - bowRadius}
+  const midX = cx + w / 2;
+
+  // Casco: popa (topo) com espelho reto, corpo reto no meio,
+  // proa (embaixo) afilando até uma ponta real.
+  const hullPath = `
+    M ${cx} ${cy + sternTaper}
+    Q ${cx} ${cy} ${cx + sternTaper} ${cy}
+    L ${cx + w - sternTaper} ${cy}
+    Q ${cx + w} ${cy} ${cx + w} ${cy + sternTaper}
+    L ${cx + w} ${cy + h - bowTaper}
+    Q ${cx + w} ${cy + h - bowTaper * 0.35} ${midX} ${cy + h}
+    Q ${cx} ${cy + h - bowTaper * 0.35} ${cx} ${cy + h - bowTaper}
     Z
   `;
 
-  // Deck line (center line)
-  const deckX = cx + w / 2;
-  const deckY1 = cy + sternRadius + 2;
-  const deckY2 = cy + h - bowRadius - 2;
+  const bridgeLen = Math.min(cellSize * 0.42, h * 0.22);
+  const bridgeW = w * 0.6;
+  const straightStart = cy + sternTaper + 2;
+  const straightEnd = cy + h - bowTaper - 2;
+  const bridgeY = Math.min(
+    straightStart + (straightEnd - straightStart) * 0.34,
+    straightEnd - bridgeLen,
+  );
+  const bridgeX = midX - bridgeW / 2;
 
-  // Bridge/cabin position
-  const bridgeY = cy + h * 0.2;
-  const bridgeH = cellSize * 0.5;
-  const bridgeW = w * 0.5;
-  const bridgeX = cx + (w - bridgeW) / 2;
+  const funnelR = cellSize * 0.11;
+  const funnelY = Math.max(bridgeY - funnelR * 2.2, straightStart + funnelR);
+
+  const showBowGun = size >= 3;
+  const gunY =
+    bridgeY + bridgeLen + (straightEnd - (bridgeY + bridgeLen)) * 0.55;
+  const gunR = cellSize * 0.09;
 
   return (
     <g>
-      {/* Hull */}
-      <path d={path} fill={color} opacity={0.3} />
-      <path d={path} fill="none" stroke={color} strokeWidth={1.5} />
-
-      {/* Center deck line */}
-      <line
-        x1={deckX}
-        y1={deckY1}
-        x2={deckX}
-        y2={deckY2}
+      {/* Casco */}
+      <path d={hullPath} fill={color} opacity={0.28} />
+      <path
+        d={hullPath}
+        fill="none"
         stroke={color}
-        strokeWidth={0.8}
-        opacity={0.5}
-        strokeDasharray="3 2"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
       />
 
-      {/* Bridge/cabin */}
+      {/* Chaminé */}
+      <circle cx={midX} cy={funnelY} r={funnelR} fill={color} opacity={0.55} />
+
+      {/* Ponte de comando */}
       <rect
         x={bridgeX}
         y={bridgeY}
         width={bridgeW}
-        height={bridgeH}
-        rx={3}
+        height={bridgeLen}
+        rx={2.5}
         fill={color}
-        opacity={0.4}
+        opacity={0.55}
+        stroke={color}
+        strokeWidth={0.6}
+      />
+      {/* Vigias/janelas da ponte */}
+      <rect
+        x={bridgeX + bridgeW * 0.28}
+        y={bridgeY + bridgeLen * 0.2}
+        width={bridgeW * 0.16}
+        height={bridgeLen * 0.6}
+        fill="white"
+        opacity={0.35}
       />
 
-      {/* Bow detail */}
+      {/* Canhão de proa (navios grandes) - torreta com canos */}
+      {showBowGun && (
+        <g>
+          {/* Base da torreta */}
+          <circle
+            cx={midX}
+            cy={gunY}
+            r={gunR * 1.6}
+            fill={color}
+            opacity={0.5}
+            stroke={color}
+            strokeWidth={0.7}
+          />
+          {/* Cano esquerdo */}
+          <rect
+            x={midX - gunR * 1.4}
+            y={gunY}
+            width={gunR * 0.8}
+            height={bowTaper * 0.3}
+            rx={0.8}
+            fill={color}
+            opacity={0.7}
+          />
+          {/* Cano direito */}
+          <rect
+            x={midX + gunR * 0.6}
+            y={gunY}
+            width={gunR * 0.8}
+            height={bowTaper * 0.3}
+            rx={0.8}
+            fill={color}
+            opacity={0.7}
+          />
+        </g>
+      )}
+
+      {/* Ponta da proa em destaque */}
       <circle
-        cx={cx + w / 2}
-        cy={cy + h - bowRadius * 0.5}
-        r={2}
+        cx={midX}
+        cy={cy + h - bowTaper * 0.15}
+        r={1.6}
         fill={color}
-        opacity={0.6}
+        opacity={0.7}
       />
     </g>
   );

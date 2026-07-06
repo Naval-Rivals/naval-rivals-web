@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Header from "../components/layout/Header";
 import LayoutPage from "../components/layout/LayoutPage";
 import Card from "../components/ui/Card";
+import ModalInfo from "../components/ui/ModalInfo";
 import GameBoard from "../components/game/GameBoard";
 import {
   CircleUserRound,
@@ -57,7 +58,9 @@ function GamePage() {
   const [myShips, setMyShips] = useState([]);
   const [enemySunkShips, setEnemySunkShips] = useState([]);
   const [enemyFleet, setEnemyFleet] = useState([]);
-  const [opponentNickname, setOpponentNickname] = useState("Oponente");
+  const [opponentNickname, setOpponentNickname] = useState(
+    location.state?.opponentNickname || sessionStorage.getItem("opponentNickname") || "Oponente"
+  );
   const [activeTab, setActiveTab] = useState("enemy");
   const [disconnected, setDisconnected] = useState(false);
   const [reconnectTime, setReconnectTime] = useState(0);
@@ -73,6 +76,9 @@ function GamePage() {
     }
 
     sessionStorage.setItem("gameId", gameId);
+    if (location.state?.opponentNickname) {
+      sessionStorage.setItem("opponentNickname", location.state.opponentNickname);
+    }
 
     // Warn user before leaving during active game
     function handleBeforeUnload(e) {
@@ -349,7 +355,7 @@ function GamePage() {
   if (loading) {
     return (
       <div className="h-screen flex flex-col overflow-hidden">
-        <Header />
+        <Header minimal />
         <LayoutPage interClassName="p-4 justify-center">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
@@ -366,23 +372,18 @@ function GamePage() {
     <div className="h-screen flex flex-col overflow-hidden relative">
       {/* Disconnect overlay */}
       {disconnected && (
-        <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center">
-          <Card className="flex flex-col items-center gap-4 p-6 max-w-sm">
-            <WifiOff className="w-12 h-12 text-red-400" />
-            <h3 className="font-poppins font-semibold text-white text-lg">
-              Oponente desconectou
-            </h3>
-            <p className="font-poppins text-white/60 text-sm text-center">
-              Aguardando reconexão...
-            </p>
-            <span className="font-anybody font-bold text-3xl text-orange-400">
-              {reconnectTime}s
-            </span>
-          </Card>
-        </div>
+        <ModalInfo
+          icon={<WifiOff className="w-12 h-12 text-red-400" />}
+          title="Oponente desconectou"
+          description="Aguardando reconexão..."
+        >
+          <span className="font-anybody font-bold text-3xl text-orange-400">
+            {reconnectTime}s
+          </span>
+        </ModalInfo>
       )}
 
-      <Header />
+      <Header minimal />
       <LayoutPage interClassName="p-4 pb-8">
         {/* Title */}
         <div className="flex flex-col items-center gap-1 w-full">

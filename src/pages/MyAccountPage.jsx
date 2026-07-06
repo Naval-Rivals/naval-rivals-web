@@ -16,6 +16,7 @@ import ErrorField from "../components/ui/ErrorField";
 import Button from "../components/ui/Button";
 import Footer from "../components/layout/Footer";
 import AlertCard from "../components/ui/AlertCard";
+import ModalConfirmation from "../components/ui/ModalConfirmation";
 
 const nicknameSchema = z.object({
   nickname: z
@@ -43,6 +44,10 @@ function MyAccountPage() {
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
   const [alert, setAlert] = useState({ show: false, message: "", type: "error" });
+  const [showNicknameModal, setShowNicknameModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pendingNicknameData, setPendingNicknameData] = useState(null);
+  const [pendingPasswordData, setPendingPasswordData] = useState(null);
 
   const {
     register: registerNickname,
@@ -63,6 +68,14 @@ function MyAccountPage() {
   });
 
   async function onSubmitNickname(data) {
+    setPendingNicknameData(data);
+    setShowNicknameModal(true);
+  }
+
+  async function confirmNicknameChange() {
+    setShowNicknameModal(false);
+    const data = pendingNicknameData;
+    if (!data) return;
     try {
       const updated = await api.patch("/users/me/nickname", {
         nickname: data.nickname,
@@ -79,6 +92,14 @@ function MyAccountPage() {
   }
 
   async function onSubmitPassword(data) {
+    setPendingPasswordData(data);
+    setShowPasswordModal(true);
+  }
+
+  async function confirmPasswordChange() {
+    setShowPasswordModal(false);
+    const data = pendingPasswordData;
+    if (!data) return;
     try {
       await api.patch("/users/me/password", {
         currentPassword: data.currentPassword,
@@ -101,6 +122,26 @@ function MyAccountPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      {showNicknameModal && (
+        <ModalConfirmation
+          title="Alterar Nickname"
+          description={`Deseja alterar seu nickname para "${pendingNicknameData?.nickname}"?`}
+          confirmText="Alterar"
+          variant="default"
+          handleConfirm={confirmNicknameChange}
+          handleCancel={() => setShowNicknameModal(false)}
+        />
+      )}
+      {showPasswordModal && (
+        <ModalConfirmation
+          title="Alterar Senha"
+          description="Tem certeza que deseja alterar sua senha?"
+          confirmText="Alterar"
+          variant="warning"
+          handleConfirm={confirmPasswordChange}
+          handleCancel={() => setShowPasswordModal(false)}
+        />
+      )}
       <AlertCard
         show={alert.show}
         onClose={() => setAlert({ ...alert, show: false })}

@@ -7,10 +7,13 @@ import Header from "../components/layout/Header";
 import BottomNav from "../components/layout/BottomNav";
 import Footer from "../components/layout/Footer";
 import { useAuth } from "../contexts/AuthContext";
+import ModalConfirmation from "../components/ui/ModalConfirmation";
+import { useState } from "react";
 
 function ProfilePage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   function handleLogout() {
     logout();
@@ -19,6 +22,16 @@ function ProfilePage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      {showLogoutModal && (
+        <ModalConfirmation
+          title="Sair da Conta"
+          description="Tem certeza que deseja sair? Você precisará fazer login novamente."
+          confirmText="Sair"
+          variant="danger"
+          handleConfirm={handleLogout}
+          handleCancel={() => setShowLogoutModal(false)}
+        />
+      )}
       <Header />
       <LayoutPage interClassName="p-4 pb-20 md:pb-4">
         <Card className="flex gap-6 flex-col w-full p-6">
@@ -51,7 +64,7 @@ function ProfilePage() {
             <Button
               variant="ghost"
               className="gap-2 max-w-fit flex items-center text-red-400! border-red-400/50! hover:bg-red-400/10!"
-              onClick={handleLogout}
+              onClick={() => setShowLogoutModal(true)}
             >
               <LogOut size={18} />
               Sair da Conta

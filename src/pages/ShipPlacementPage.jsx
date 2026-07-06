@@ -15,6 +15,7 @@ import {
   CircleCheckBig,
   Loader,
   Trash2,
+  UserRoundX,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
@@ -23,6 +24,7 @@ import ShipSvg from "../components/game/ShipSvg";
 import GameBoard from "../components/game/GameBoard";
 import { ws } from "../services/websocket";
 import AlertCard from "../components/ui/AlertCard";
+import ModalInfo from "../components/ui/ModalInfo";
 
 const FLEET = [
   { type: "CARRIER", name: "Porta-aviões", size: 5 },
@@ -83,11 +85,14 @@ function ShipPlacementPage() {
   const subscriptionRef = useRef(null);
 
   const gameId = location.state?.gameId;
+  const roomId = location.state?.roomId;
   const [placedShips, setPlacedShips] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [opponentReady, setOpponentReady] = useState(false);
+  const [opponentLeft, setOpponentLeft] = useState(false);
   const [alert, setAlert] = useState({ show: false, message: "", type: "error" });
+  const [opponentNickname, setOpponentNickname] = useState(location.state?.opponentNickname || "");
 
   // Selection state: which ship from fleet is selected to place, or which placed ship is selected
   const [selectedFleetShip, setSelectedFleetShip] = useState(null); // ship type from fleet
@@ -114,6 +119,12 @@ function ShipPlacementPage() {
           `/topic/game/${gameId}/placement`,
           handlePlacementEvent,
         );
+        // Subscribe to game events for disconnect/game over
+        ws.subscribe(`/topic/game/${gameId}/events`, handleGameEvent);
+        // Also subscribe to room events to detect opponent leaving
+        if (roomId) {
+          ws.subscribe(`/topic/room/${roomId}`, handleRoomEvent);
+        }
       },
     });
 
@@ -134,10 +145,27 @@ function ShipPlacementPage() {
         break;
       case "GAME_STARTED":
         navigate("/game/play", {
-          state: { gameId: event.gameId, firstTurn: event.firstTurn, turnTimeout: event.turnTimeout },
+          state: {
+            gameId: event.gameId,
+            firstTurn: event.firstTurn,
+            turnTimeout: event.turnTimeout,
+            opponentNickname: location.state?.opponentNickname,
+          },
           replace: true,
         });
         break;
+    }
+  }
+
+  function handleRoomEvent(event) {
+    if (event.event === "PLAYER_LEFT") {
+      setOpponentLeft(true);
+    }
+  }
+
+  function handleGameEvent(event) {
+    if (event.event === "OPPONENT_DISCONNECTED" || event.event === "GAME_OVER") {
+      setOpponentLeft(true);
     }
   }
 
@@ -307,7 +335,23 @@ function ShipPlacementPage() {
         {alert.message}
       </AlertCard>
 
-      <Header />
+      {opponentLeft && (
+        <ModalInfo
+          icon={<UserRoundX className="w-12 h-12 text-red-400" />}
+          title="Oponente saiu da partida"
+          description="O oponente abandonou a batalha. A partida foi cancelada."
+        >
+          <Button
+            variant="primary"
+            className="mt-2 flex items-center justify-center gap-2"
+            onClick={() => navigate("/", { replace: true })}
+          >
+            Voltar ao Menu
+          </Button>
+        </ModalInfo>
+      )}
+
+      <Header minimal />
       <LayoutPage interClassName="p-4 pb-8">
         <div className="flex flex-col items-center gap-1 w-full">
           <h2 className="font-anybody font-extrabold text-2xl md:text-3xl text-white text-center">
