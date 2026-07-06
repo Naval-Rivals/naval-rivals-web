@@ -1,19 +1,114 @@
+import { useState } from "react";
 import { ArrowLeft, Save } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useNavigate } from "react-router";
+import { useAuth } from "../contexts/AuthContext";
+import { api } from "../services/api";
 import Header from "../components/layout/Header";
 import LayoutPage from "../components/layout/LayoutPage";
 import BottomNav from "../components/layout/BottomNav";
-import { useNavigate } from "react-router";
 import Card from "../components/ui/Card";
 import Label from "../components/ui/Label";
 import Input from "../components/ui/Input";
 import ErrorField from "../components/ui/ErrorField";
 import Button from "../components/ui/Button";
 import Footer from "../components/layout/Footer";
+import AlertCard from "../components/ui/AlertCard";
+
+const nicknameSchema = z.object({
+  nickname: z
+    .string()
+    .min(1, "Nickname é obrigatório")
+    .max(150, "Máximo 150 caracteres"),
+});
+
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Senha atual é obrigatória"),
+    newPassword: z
+      .string()
+      .min(1, "Nova senha é obrigatória")
+      .min(6, "Precisa ter no mínimo 6 caracteres")
+      .max(254, "Máximo 254 caracteres"),
+    passwordConfirmation: z.string().min(1, "Confirmação é obrigatória"),
+  })
+  .refine((data) => data.newPassword === data.passwordConfirmation, {
+    message: "As senhas não coincidem",
+    path: ["passwordConfirmation"],
+  });
 
 function MyAccountPage() {
   const navigate = useNavigate();
+  const { user, updateUser } = useAuth();
+  const [alert, setAlert] = useState({ show: false, message: "", type: "error" });
+
+  const {
+    register: registerNickname,
+    handleSubmit: handleSubmitNickname,
+    formState: { errors: nicknameErrors },
+  } = useForm({
+    resolver: zodResolver(nicknameSchema),
+    defaultValues: { nickname: user?.nickname || "" },
+  });
+
+  const {
+    register: registerPassword,
+    handleSubmit: handleSubmitPassword,
+    formState: { errors: passwordErrors },
+    reset: resetPassword,
+  } = useForm({
+    resolver: zodResolver(passwordSchema),
+  });
+
+  async function onSubmitNickname(data) {
+    try {
+      const updated = await api.patch("/users/me/nickname", {
+        nickname: data.nickname,
+      });
+      updateUser({ nickname: updated.nickname });
+      setAlert({ show: true, message: "Nickname alterado com sucesso!", type: "success" });
+    } catch (error) {
+      if (error.status === 409) {
+        setAlert({ show: true, message: error.message, type: "error" });
+      } else {
+        setAlert({ show: true, message: error.message || "Erro ao alterar nickname", type: "error" });
+      }
+    }
+  }
+
+  async function onSubmitPassword(data) {
+    try {
+      await api.patch("/users/me/password", {
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+        passwordConfirmation: data.passwordConfirmation,
+      });
+      resetPassword();
+      setAlert({ show: true, message: "Senha alterada com sucesso!", type: "success" });
+    } catch (error) {
+      if (error.status === 401) {
+        setAlert({ show: true, message: error.message, type: "error" });
+      } else if (error.data?.details) {
+        const messages = error.data.details.map((d) => d.message).join(". ");
+        setAlert({ show: true, message: messages, type: "error" });
+      } else {
+        setAlert({ show: true, message: error.message || "Erro ao alterar senha", type: "error" });
+      }
+    }
+  }
+
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden relative">
+      <AlertCard
+        show={alert.show}
+        onClose={() => setAlert({ ...alert, show: false })}
+        type={alert.type}
+      >
+        {alert.message}
+      </AlertCard>
+
       <Header />
       <LayoutPage className="p-2 pb-20 md:pb-2">
         <div className="flex flex-col w-full gap-4">
@@ -29,13 +124,10 @@ function MyAccountPage() {
 
           <form
             className="w-full"
-            autoComplete="nope"
-            // onSubmit={handleSubmitName((data) => {
-            //   setPendingData(data);
-            //   handleOpenModalInfoProfile();
-            // })}
+            autoComplete="off"
+            onSubmit={handleSubmitNickname(onSubmitNickname)}
           >
-            <Card className=" flex flex-col gap-4 items-start">
+            <Card className="flex flex-col gap-4 items-start">
               <h2 className="text-white text-lg font-semibold">
                 Informações Pessoais
               </h2>
@@ -44,16 +136,21 @@ function MyAccountPage() {
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
-                  value="teste@email"
+                  value={user?.email || ""}
                   disabled
                   className="opacity-60"
                 />
               </div>
 
               <div className="flex flex-col w-full gap-1">
-                <Label htmlFor="name">Nome</Label>
-                <Input id="name" placeholder="Seu nome" />
-                <ErrorField />
+                <Label htmlFor="nickname">Nickname</Label>
+                <Input
+                  id="nickname"
+                  placeholder="Seu nickname"
+                  error={!!nicknameErrors.nickname}
+                  {...registerNickname("nickname")}
+                />
+                <ErrorField error={nicknameErrors.nickname} />
               </div>
 
               <Button
@@ -61,17 +158,15 @@ function MyAccountPage() {
                 className="flex items-center max-w-fit px-4 gap-2 self-end"
               >
                 <Save size={18} />
-                Salvar Nome
+                Salvar Nickname
               </Button>
             </Card>
           </form>
+
           <form
             className="w-full"
-            autoComplete="nope"
-            // onSubmit={handleSubmitPassword((data) => {
-            //   setPendingData(data);
-            //   handleOpenModalPassword();
-            // })}
+            autoComplete="off"
+            onSubmit={handleSubmitPassword(onSubmitPassword)}
           >
             <Card className="flex flex-col gap-4 items-start">
               <h2 className="text-white text-lg font-semibold">
@@ -82,15 +177,24 @@ function MyAccountPage() {
                 <Label htmlFor="currentPassword">Senha Atual</Label>
                 <Input
                   id="currentPassword"
+                  type="password"
                   placeholder="Digite sua senha atual"
+                  error={!!passwordErrors.currentPassword}
+                  {...registerPassword("currentPassword")}
                 />
-                <ErrorField />
+                <ErrorField error={passwordErrors.currentPassword} />
               </div>
 
               <div className="flex flex-col w-full gap-1">
                 <Label htmlFor="newPassword">Nova Senha</Label>
-                <Input id="newPassword" placeholder="Digite a nova senha" />
-                <ErrorField />
+                <Input
+                  id="newPassword"
+                  type="password"
+                  placeholder="Digite a nova senha"
+                  error={!!passwordErrors.newPassword}
+                  {...registerPassword("newPassword")}
+                />
+                <ErrorField error={passwordErrors.newPassword} />
               </div>
 
               <div className="flex flex-col w-full gap-1">
@@ -99,9 +203,12 @@ function MyAccountPage() {
                 </Label>
                 <Input
                   id="passwordConfirmation"
+                  type="password"
                   placeholder="Confirme a nova senha"
+                  error={!!passwordErrors.passwordConfirmation}
+                  {...registerPassword("passwordConfirmation")}
                 />
-                <ErrorField />
+                <ErrorField error={passwordErrors.passwordConfirmation} />
               </div>
 
               <Button

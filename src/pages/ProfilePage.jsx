@@ -6,9 +6,17 @@ import Button from "../components/ui/Button";
 import Header from "../components/layout/Header";
 import BottomNav from "../components/layout/BottomNav";
 import Footer from "../components/layout/Footer";
+import { useAuth } from "../contexts/AuthContext";
 
 function ProfilePage() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
+  }
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
@@ -20,7 +28,7 @@ function ProfilePage() {
             </div>
             <div className="flex flex-col gap-0.5">
               <h1 className="text-white font-poppins font-semibold text-2xl">
-                Olá, Teste
+                Olá, {user?.nickname || "Jogador"}
               </h1>
               <span className="font-poppins text-sm text-white/50">
                 Capitão de frota
@@ -43,6 +51,7 @@ function ProfilePage() {
             <Button
               variant="ghost"
               className="gap-2 max-w-fit flex items-center text-red-400! border-red-400/50! hover:bg-red-400/10!"
+              onClick={handleLogout}
             >
               <LogOut size={18} />
               Sair da Conta

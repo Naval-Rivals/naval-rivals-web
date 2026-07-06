@@ -21,7 +21,7 @@ const Input = forwardRef(
       <div className="relative w-full">
         <input
           ref={ref}
-          className={`bg-blue-dark-900 text-white border-3 rounded-lg w-full p-2 placeholder:font-light placeholder:text-white/40 placeholder:text-sm placeholder:tracking-wide transition-all duration-200 outline-none focus:border-orange-400 focus:shadow-[0_0_8px_rgba(255,120,0,0.35)] ${isPassword ? "pr-10" : ""} ${error ? "border-red-500" : "border-blue-300"} ${className}`}
+          className={`bg-blue-dark-900 text-white border-3 rounded-lg w-full p-2 placeholder:font-light placeholder:text-white/40 placeholder:text-sm placeholder:tracking-wide transition-all duration-200 outline-none  focus:shadow-[0_0_8px_rgba(255,120,0,0.50)] ${isPassword ? "pr-10" : ""} ${error ? "border-red-500" : "border-blue-300"} ${className}`}
           type={isPassword && showPassword ? "text" : type}
           placeholder={placeholder}
           id={id}

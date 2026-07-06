@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router";
+import ProtectedRoute from "../components/ProtectedRoute";
 import RegisterPage from "../pages/RegisterPage";
 import LoginPage from "../pages/LoginPage";
 import HomePage from "../pages/HomePage";
@@ -16,18 +17,21 @@ function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Rotas públicas */}
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<HomePage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/profile/my-account" element={<MyAccountPage />} />
         <Route path="/ranking" element={<RankingPage />} />
         <Route path="/about-us" element={<AboutUsPage />} />
         <Route path="/game/rules" element={<GameRulesPage />} />
-        <Route path="/game/waiting-room" element={<WaitingRoomPage />} />
-        <Route path="/game/ship-placement" element={<ShipPlacementPage />} />
-        <Route path="/game/play" element={<GamePage />} />
-        <Route path="/game/result" element={<GameResultPage />} />
+
+        {/* Rotas protegidas */}
+        <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+        <Route path="/profile/my-account" element={<ProtectedRoute><MyAccountPage /></ProtectedRoute>} />
+        <Route path="/game/waiting-room" element={<ProtectedRoute><WaitingRoomPage /></ProtectedRoute>} />
+        <Route path="/game/ship-placement" element={<ProtectedRoute><ShipPlacementPage /></ProtectedRoute>} />
+        <Route path="/game/play" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
+        <Route path="/game/result" element={<ProtectedRoute><GameResultPage /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );
