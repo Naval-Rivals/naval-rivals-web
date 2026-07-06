@@ -4,6 +4,7 @@ import LayoutPage from "../components/layout/LayoutPage";
 import Card from "../components/ui/Card";
 import ModalInfo from "../components/ui/ModalInfo";
 import GameBoard from "../components/game/GameBoard";
+import ExplosionEffect from "../components/game/ExplosionEffect";
 import {
   CircleUserRound,
   Clock,
@@ -13,6 +14,7 @@ import {
   Loader2,
   Wifi,
   WifiOff,
+  Rocket,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
@@ -59,12 +61,17 @@ function GamePage() {
   const [enemySunkShips, setEnemySunkShips] = useState([]);
   const [enemyFleet, setEnemyFleet] = useState([]);
   const [opponentNickname, setOpponentNickname] = useState(
-    location.state?.opponentNickname || sessionStorage.getItem("opponentNickname") || "Oponente"
+    location.state?.opponentNickname ||
+      sessionStorage.getItem("opponentNickname") ||
+      "Oponente",
   );
   const [activeTab, setActiveTab] = useState("enemy");
   const [disconnected, setDisconnected] = useState(false);
   const [reconnectTime, setReconnectTime] = useState(0);
   const [attackingCell, setAttackingCell] = useState(null);
+  const [torpedoAvailable, setTorpedoAvailable] = useState(true);
+  const [torpedoMode, setTorpedoMode] = useState(false);
+  const [explosions, setExplosions] = useState([]);
 
   const isMyTurn = currentTurn === user?.id;
 
@@ -77,7 +84,10 @@ function GamePage() {
 
     sessionStorage.setItem("gameId", gameId);
     if (location.state?.opponentNickname) {
-      sessionStorage.setItem("opponentNickname", location.state.opponentNickname);
+      sessionStorage.setItem(
+        "opponentNickname",
+        location.state.opponentNickname,
+      );
     }
 
     // Warn user before leaving during active game
@@ -198,6 +208,11 @@ function GamePage() {
     setMyFleet(fleet);
     setMyShips(shipsWithPositions);
 
+    // Set torpedo availability
+    if (state.torpedoAvailable !== undefined) {
+      setTorpedoAvailable(state.torpedoAvailable);
+    }
+
     // Build enemy board: shots made
     const enemyCells = {};
     for (const shot of state.myShotsMade || []) {
@@ -224,9 +239,18 @@ function GamePage() {
         handleAttackResult(payload);
         break;
       case "TURN_CHANGE":
+        // Auto-switch tab on mobile when turn changes to a different player
+        if (payload.nextTurn !== currentTurn) {
+          if (payload.nextTurn === user?.id) {
+            setActiveTab("enemy"); // My turn: show enemy board to attack
+          } else {
+            setActiveTab("my"); // Opponent's turn: show my board to watch
+          }
+        }
         setCurrentTurn(payload.nextTurn);
         setTimeLeft(payload.turnTimeout || 60);
         setAttackingCell(null);
+        setTorpedoMode(false);
         break;
       case "TURN_TIMEOUT":
         setAttackingCell(null);
@@ -256,22 +280,43 @@ function GamePage() {
     const cellKey = `${col}${row}`;
 
     if (attackerId === user?.id) {
-      // My attack on enemy board
-      setEnemyBoard((prev) => ({
-        ...prev,
-        [cellKey]: hit ? "hit" : "miss",
-      }));
+      // My attack on enemy board - don't overwrite "sunk" cells
+      setEnemyBoard((prev) => {
+        if (prev[cellKey] === "sunk") return prev;
+        return { ...prev, [cellKey]: hit ? "hit" : "miss" };
+      });
     } else {
-      // Enemy attack on my board
-      setMyBoard((prev) => ({
-        ...prev,
-        [cellKey]: hit ? "hit" : "miss",
-      }));
+      // Enemy attack on my board - don't overwrite "sunk" cells
+      setMyBoard((prev) => {
+        if (prev[cellKey] === "sunk") return prev;
+        return { ...prev, [cellKey]: hit ? "hit" : "miss" };
+      });
     }
   }
 
   function handleShipSunk(payload) {
     const { ownerId, shipType, positions } = payload;
+
+    // Trigger explosion animation positioned over the sunk ship
+    const parsedPositions = positions.map((cellNotation) => parseCellNotation(cellNotation));
+    const colIndices = parsedPositions.map((p) => COLUMNS.indexOf(p.col));
+    const rowIndices = parsedPositions.map((p) => p.row - 1);
+    const minCol = Math.min(...colIndices);
+    const minRow = Math.min(...rowIndices);
+    const maxCol = Math.max(...colIndices);
+    const maxRow = Math.max(...rowIndices);
+    const cellSize = 33;
+
+    const explosionId = `${shipType}-${Date.now()}`;
+    const explosion = {
+      id: explosionId,
+      x: minCol * cellSize,
+      y: minRow * cellSize,
+      width: (maxCol - minCol + 1) * cellSize,
+      height: (maxRow - minRow + 1) * cellSize,
+      board: ownerId === user?.id ? "my" : "enemy",
+    };
+    setExplosions((prev) => [...prev, explosion]);
 
     if (ownerId === user?.id) {
       // My ship was sunk
@@ -281,14 +326,13 @@ function GamePage() {
       setMyShips((prev) =>
         prev.map((s) => (s.type === shipType ? { ...s, sunk: true } : s)),
       );
-      // Mark cells as sunk on my board
+      // Mark cells as sunk on my board (all at once)
+      const sunkCells = {};
       for (const cellNotation of positions) {
         const { col, row } = parseCellNotation(cellNotation);
-        setMyBoard((prev) => ({
-          ...prev,
-          [`${col}${row}`]: "sunk",
-        }));
+        sunkCells[`${col}${row}`] = "sunk";
       }
+      setMyBoard((prev) => ({ ...prev, ...sunkCells }));
     } else {
       // Enemy ship was sunk
       const sunkPositions = positions.map((cellNotation) => {
@@ -304,18 +348,25 @@ function GamePage() {
         { type: shipType, positions: sunkPositions, sunk: true },
       ]);
       // Mark cells as sunk on enemy board
+      // Mark cells as sunk on enemy board (all at once)
+      const sunkCells = {};
       for (const cellNotation of positions) {
         const { col, row } = parseCellNotation(cellNotation);
-        setEnemyBoard((prev) => ({
-          ...prev,
-          [`${col}${row}`]: "sunk",
-        }));
+        sunkCells[`${col}${row}`] = "sunk";
       }
+      setEnemyBoard((prev) => ({ ...prev, ...sunkCells }));
     }
   }
 
   function handleGameOver(payload) {
     sessionStorage.removeItem("gameId");
+    sessionStorage.removeItem("opponentNickname");
+    // Disconnect WebSocket immediately to prevent reconnect attempts
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+      subscriptionRef.current = null;
+    }
+    ws.disconnect();
     navigate("/game/result", {
       state: { gameId, winnerId: payload.winnerId },
       replace: true,
@@ -332,7 +383,14 @@ function GamePage() {
     const cell = boardClickToCell(col, row);
     setAttackingCell(cellKey);
 
-    ws.publish(`/app/game/${gameId}/attack`, { cell });
+    const payload = { cell };
+    if (torpedoMode) {
+      payload.type = "TORPEDO";
+      setTorpedoAvailable(false);
+      setTorpedoMode(false);
+    }
+
+    ws.publish(`/app/game/${gameId}/attack`, payload);
   }
 
   // Reconnect countdown
@@ -466,6 +524,40 @@ function GamePage() {
           </div>
         </Card>
 
+        {/* Torpedo button */}
+        {isMyTurn && (
+          <div className="flex items-center justify-center w-full max-w-4xl">
+            <button
+              onClick={() => torpedoAvailable && setTorpedoMode((m) => !m)}
+              disabled={!torpedoAvailable}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 font-poppins font-semibold text-sm transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+                torpedoMode
+                  ? "bg-red-500/20 border-red-400 text-red-300 ring-2 ring-red-400/50 shadow-lg shadow-red-500/20"
+                  : "bg-blue-dark-900/60 border-blue-300/30 text-white/70 hover:border-orange-400/50 hover:text-white"
+              }`}
+            >
+              {/* <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <ellipse cx="10" cy="10" rx="3" ry="2" fill="currentColor" opacity="0.6" />
+                <rect x="2" y="9" width="8" height="2" rx="1" fill="currentColor" opacity="0.8" />
+                <polygon points="13,8 18,10 13,12" fill="currentColor" opacity="0.9" />
+                <line x1="1" y1="8" x2="3" y2="10" stroke="currentColor" strokeWidth="1.2" />
+                <line x1="1" y1="12" x2="3" y2="10" stroke="currentColor" strokeWidth="1.2" />
+              </svg> */}
+              <Rocket size={22} />
+              {torpedoMode
+                ? "TORPEDO ATIVO!"
+                : torpedoAvailable
+                  ? "USAR TORPEDO"
+                  : "TORPEDO USADO"}
+            </button>
+            {torpedoMode && (
+              <span className="ml-3 font-poppins text-xs text-red-300 animate-pulse">
+                Clique numa célula para disparar o torpedo
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Mobile toggle */}
         <div className="flex md:hidden w-full max-w-4xl">
           <button
@@ -501,7 +593,20 @@ function GamePage() {
             <span className="font-poppins font-semibold text-xs text-blue-300 uppercase tracking-widest text-center hidden md:block">
               Seu Tabuleiro
             </span>
-            <GameBoard cells={myBoard} ships={myShips} />
+            <div className="relative">
+              <GameBoard cells={myBoard} ships={myShips}>
+                {explosions.filter((e) => e.board === "my").map((exp) => (
+                  <ExplosionEffect
+                    key={exp.id}
+                    x={exp.x}
+                    y={exp.y}
+                    width={exp.width}
+                    height={exp.height}
+                    onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))}
+                  />
+                ))}
+              </GameBoard>
+            </div>
           </Card>
 
           {/* Enemy Board */}
@@ -513,11 +618,24 @@ function GamePage() {
             <span className="font-poppins font-semibold text-xs text-orange-300 uppercase tracking-widest text-center hidden md:block">
               Tabuleiro Inimigo
             </span>
-            <GameBoard
-              cells={enemyBoard}
-              ships={enemySunkShips}
-              onCellClick={isMyTurn ? handleCellClick : undefined}
-            />
+            <div className="relative">
+              <GameBoard
+                cells={enemyBoard}
+                ships={enemySunkShips}
+                onCellClick={isMyTurn ? handleCellClick : undefined}
+              >
+                {explosions.filter((e) => e.board === "enemy").map((exp) => (
+                  <ExplosionEffect
+                    key={exp.id}
+                    x={exp.x}
+                    y={exp.y}
+                    width={exp.width}
+                    height={exp.height}
+                    onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))}
+                  />
+                ))}
+              </GameBoard>
+            </div>
           </Card>
         </div>
 

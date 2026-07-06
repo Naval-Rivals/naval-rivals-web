@@ -571,7 +571,7 @@ function PlacementBoard({ cellsMap, placedShips, selectedPlacedShip, onPlacedShi
         </div>
 
         <div className="relative flex-1">
-          <div className="grid grid-cols-10 border border-blue-300/20 rounded-md overflow-hidden">
+          <div className="grid grid-cols-10 rounded-md overflow-hidden">
             {ROWS.map((row) =>
               COLUMNS.map((col) => (
                 <DroppableCell
@@ -647,8 +647,11 @@ function PlacedShipOverlay({ ship, isSelected, onShipClick }) {
   const minCol = Math.min(...colIndices);
   const minRow = Math.min(...rowIndices);
 
-  const left = minCol * CELL_SIZE;
-  const top = minRow * CELL_SIZE;
+  // Use percentage positioning (10% per cell in a 10x10 grid)
+  const leftPct = minCol * 10;
+  const topPct = minRow * 10;
+  const widthPct = (orientation === "horizontal" ? 1 : size) * 10;
+  const heightPct = (orientation === "horizontal" ? size : 1) * 10;
 
   function handleClick(e) {
     e.stopPropagation();
@@ -661,14 +664,14 @@ function PlacedShipOverlay({ ship, isSelected, onShipClick }) {
       className={`absolute cursor-grab active:cursor-grabbing transition-all ${
         isDragging ? "opacity-50 scale-95" : ""
       } ${isSelected ? "drop-shadow-[0_0_8px_rgba(251,146,60,0.7)]" : "hover:drop-shadow-[0_0_4px_rgba(74,222,128,0.5)]"}`}
-      style={{ left: `${left}px`, top: `${top}px` }}
+      style={{ left: `${leftPct}%`, top: `${topPct}%`, width: `${widthPct}%`, height: `${heightPct}%` }}
       onClick={handleClick}
     >
       <ShipSvg
         size={size}
         orientation={orientation}
         color={isSelected ? "#fb923c" : "#4ade80"}
-        cellSize={CELL_SIZE}
+        cellSize={33}
       />
     </div>
   );

@@ -40,7 +40,7 @@ const CELL_INDICATORS = {
  * - onCellClick: (col, row) => void (opcional)
  * - className: classes adicionais para o container (opcional)
  */
-function GameBoard({ cells = {}, ships = [], onCellClick, className = "" }) {
+function GameBoard({ cells = {}, ships = [], onCellClick, className = "", children }) {
   const getCellState = (col, row) => {
     return cells[`${col}${row}`] || "empty";
   };
@@ -81,7 +81,7 @@ function GameBoard({ cells = {}, ships = [], onCellClick, className = "" }) {
         {/* Grid de células com overlay de navios */}
         <div className="relative flex-1">
           {/* Cells grid */}
-          <div className="grid grid-cols-10 border border-blue-300/20 rounded-md overflow-hidden">
+          <div className="grid grid-cols-10 rounded-md overflow-hidden">
             {ROWS.map((row) =>
               COLUMNS.map((col) => {
                 const state = getCellState(col, row);
@@ -102,6 +102,9 @@ function GameBoard({ cells = {}, ships = [], onCellClick, className = "" }) {
           {ships.map((ship) => (
             <ShipOverlay key={ship.type} ship={ship} />
           ))}
+
+          {/* Extra content (e.g. explosions) */}
+          {children}
         </div>
       </div>
     </div>
@@ -141,20 +144,22 @@ function ShipOverlay({ ship }) {
   // Color based on state
   const color = ship.sunk ? "#f87171" : "#4ade80"; // red-400 : green-400
 
-  // Calculate ship dimensions for centering skull
-  const shipWidth = orientation === "horizontal" ? size * CELL_SIZE : CELL_SIZE;
-  const shipHeight = orientation === "horizontal" ? CELL_SIZE : size * CELL_SIZE;
+  // Use percentage positioning (10% per cell in a 10x10 grid)
+  const leftPct = minCol * 10;
+  const topPct = minRow * 10;
+  const widthPct = (orientation === "horizontal" ? 1 : size) * 10;
+  const heightPct = (orientation === "horizontal" ? size : 1) * 10;
 
   return (
     <div
       className="absolute pointer-events-none"
-      style={{ left: `${left}px`, top: `${top}px`, width: `${shipWidth}px`, height: `${shipHeight}px` }}
+      style={{ left: `${leftPct}%`, top: `${topPct}%`, width: `${widthPct}%`, height: `${heightPct}%` }}
     >
       <ShipSvg
         size={size}
         orientation={orientation}
         color={color}
-        cellSize={CELL_SIZE}
+        cellSize={33}
       />
       {ship.sunk && (
         <div className="absolute inset-0 flex items-center justify-center">
