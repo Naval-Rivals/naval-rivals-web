@@ -25,8 +25,105 @@ const CELL_STYLES = {
 const CELL_INDICATORS = {
   empty: null,
   ship: null, // Ship SVG handles this now
-  hit: <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="4" fill="#fb923c" /><line x1="9" y1="1" x2="9" y2="4" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" /><line x1="9" y1="14" x2="9" y2="17" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" /><line x1="1" y1="9" x2="4" y2="9" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" /><line x1="14" y1="9" x2="17" y2="9" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" /><line x1="3.5" y1="3.5" x2="5.5" y2="5.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" /><line x1="12.5" y1="12.5" x2="14.5" y2="14.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" /><line x1="14.5" y1="3.5" x2="12.5" y2="5.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" /><line x1="5.5" y1="12.5" x2="3.5" y2="14.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" /></svg>,
-  miss: <svg width="12" height="12" viewBox="0 0 12 12" className="opacity-50"><line x1="2" y1="2" x2="10" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round" /><line x1="10" y1="2" x2="2" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round" /></svg>,
+  hit: (
+    <svg width="18" height="18" viewBox="0 0 18 18">
+      <circle cx="9" cy="9" r="4" fill="#fb923c" />
+      <line
+        x1="9"
+        y1="1"
+        x2="9"
+        y2="4"
+        stroke="#fb923c"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="9"
+        y1="14"
+        x2="9"
+        y2="17"
+        stroke="#fb923c"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="1"
+        y1="9"
+        x2="4"
+        y2="9"
+        stroke="#fb923c"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="14"
+        y1="9"
+        x2="17"
+        y2="9"
+        stroke="#fb923c"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="3.5"
+        y1="3.5"
+        x2="5.5"
+        y2="5.5"
+        stroke="#fb923c"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <line
+        x1="12.5"
+        y1="12.5"
+        x2="14.5"
+        y2="14.5"
+        stroke="#fb923c"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <line
+        x1="14.5"
+        y1="3.5"
+        x2="12.5"
+        y2="5.5"
+        stroke="#fb923c"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <line
+        x1="5.5"
+        y1="12.5"
+        x2="3.5"
+        y2="14.5"
+        stroke="#fb923c"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
+  miss: (
+    <svg width="12" height="12" viewBox="0 0 12 12" className="opacity-50">
+      <line
+        x1="2"
+        y1="2"
+        x2="10"
+        y2="10"
+        stroke="white"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <line
+        x1="10"
+        y1="2"
+        x2="2"
+        y2="10"
+        stroke="white"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
   sunk: null, // Skull is rendered on the ShipOverlay
 };
 
@@ -40,7 +137,13 @@ const CELL_INDICATORS = {
  * - onCellClick: (col, row) => void (opcional)
  * - className: classes adicionais para o container (opcional)
  */
-function GameBoard({ cells = {}, ships = [], onCellClick, className = "", children }) {
+function GameBoard({
+  cells = {},
+  ships = [],
+  onCellClick,
+  className = "",
+  children,
+}) {
   const getCellState = (col, row) => {
     return cells[`${col}${row}`] || "empty";
   };
@@ -100,8 +203,15 @@ function GameBoard({ cells = {}, ships = [], onCellClick, className = "", childr
 
           {/* Ship SVG overlays */}
           {ships.map((ship) => (
-            <ShipOverlay key={ship.type} ship={ship} />
+            <ShipOverlay key={`ship-${ship.type}`} ship={ship} />
           ))}
+
+          {/* Skull overlays */}
+          {ships
+            .filter((ship) => ship.sunk)
+            .map((ship) => (
+              <SkullOverlay key={`skull-${ship.type}`} ship={ship} />
+            ))}
 
           {/* Extra content (e.g. explosions) */}
           {children}
@@ -111,61 +221,78 @@ function GameBoard({ cells = {}, ships = [], onCellClick, className = "", childr
   );
 }
 
-/**
- * Calcula posição e orientação do navio baseado nas posições das células.
- */
-function ShipOverlay({ ship }) {
-  if (!ship.positions || ship.positions.length === 0) return null;
-
+function getShipBounds(ship) {
   const positions = ship.positions;
+  const first = positions[0];
+  const last = positions[positions.length - 1];
+  const vertical = first.col === last.col;
+  const cols = positions.map((p) => COLUMNS.indexOf(p.col));
+  const rows = positions.map((p) => p.row - 1);
+  const minCol = Math.min(...cols);
+  const minRow = Math.min(...rows);
   const size = positions.length;
+  return {
+    vertical,
+    minCol,
+    minRow,
+    size,
+    widthPct: (vertical ? 1 : size) * 10,
+    heightPct: (vertical ? size : 1) * 10,
+    leftPct: minCol * 10,
+    topPct: minRow * 10,
+  };
+}
 
-  // Determine orientation by checking if columns or rows change
-  const firstPos = positions[0];
-  const lastPos = positions[positions.length - 1];
+function SkullOverlay({ ship }) {
+  if (!ship.positions?.length) return null;
 
-  let orientation = "horizontal";
-  if (firstPos.col === lastPos.col) {
-    // Same column means vertical (rows change)
-    orientation = "vertical";
-  }
-
-  // Find top-left position
-  const colIndices = positions.map((p) => COLUMNS.indexOf(p.col));
-  const rowIndices = positions.map((p) => p.row - 1); // 0-indexed
-
-  const minCol = Math.min(...colIndices);
-  const minRow = Math.min(...rowIndices);
-
-  // Calculate pixel position
-  const left = minCol * CELL_SIZE;
-  const top = minRow * CELL_SIZE;
-
-  // Color based on state
-  const color = ship.sunk ? "#f87171" : "#4ade80"; // red-400 : green-400
-
-  // Use percentage positioning (10% per cell in a 10x10 grid)
-  const leftPct = minCol * 10;
-  const topPct = minRow * 10;
-  const widthPct = (orientation === "horizontal" ? 1 : size) * 10;
-  const heightPct = (orientation === "horizontal" ? size : 1) * 10;
+  const b = getShipBounds(ship);
+  const leftPct = b.leftPct + b.widthPct / 2;
+  const topPct = b.topPct + b.heightPct / 2;
 
   return (
     <div
       className="absolute pointer-events-none"
-      style={{ left: `${leftPct}%`, top: `${topPct}%`, width: `${widthPct}%`, height: `${heightPct}%` }}
+      style={{
+        left: `${leftPct}%`,
+        top: `${topPct}%`,
+        transform: "translate(-50%, -50%)",
+      }}
+    >
+      <Skull
+        size={22}
+        className="text-red-400 drop-shadow-[0_0_6px_rgba(248,113,113,0.9)]"
+      />
+    </div>
+  );
+}
+
+/**
+ * Calcula posição e orientação do navio baseado nas posições das células.
+ */
+function ShipOverlay({ ship }) {
+  if (!ship.positions?.length) return null;
+
+  const { size, vertical, leftPct, topPct, widthPct, heightPct } =
+    getShipBounds(ship);
+  const orientation = vertical ? "vertical" : "horizontal";
+
+  return (
+    <div
+      className="absolute pointer-events-none"
+      style={{
+        left: `${leftPct}%`,
+        top: `${topPct}%`,
+        width: `${widthPct}%`,
+        height: `${heightPct}%`,
+      }}
     >
       <ShipSvg
         size={size}
         orientation={orientation}
-        color={color}
-        cellSize={33}
+        color={ship.sunk ? "#f87171" : "#4ade80"}
+        cellSize={CELL_SIZE}
       />
-      {ship.sunk && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Skull size={24} className="text-red-400 drop-shadow-[0_0_4px_rgba(248,113,113,0.8)]" />
-        </div>
-      )}
     </div>
   );
 }
