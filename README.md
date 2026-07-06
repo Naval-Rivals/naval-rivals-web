@@ -14,3 +14,11 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## MODO TÁTICO
+
+- Torpedo (1x, tiro que afunda navio)
+- Radar (1x, verifica se tem navio em bloco 3x3)
+- Escudo (2x, proximo tiro recebido é bloqueado)
+- Contra-torpedo (1x, caso receba um torpedo depois de ativado, bloqueia)
+- EMP Naval - (1x, desativa habilidades do inimigo por 2 turnos)
