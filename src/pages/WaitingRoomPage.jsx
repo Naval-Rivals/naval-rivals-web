@@ -3,28 +3,110 @@ import LayoutPage from "../components/layout/LayoutPage";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import SectionTitle from "../components/ui/SectionTitle";
-import { Copy, Link, Users, CircleUserRound, Loader, X } from "lucide-react";
-import { useState } from "react";
-import { useNavigate } from "react-router";
-
-const MOCK_ROOM_CODE = "NR-7X3K";
-const MOCK_SHARE_LINK = "https://navalrivals.com/join/NR-7X3K";
+import { Copy, Link, Users, CircleUserRound, Loader, X, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router";
+import { useAuth } from "../contexts/AuthContext";
+import { api } from "../services/api";
+import { ws } from "../services/websocket";
 
 function WaitingRoomPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
   const [codeCopied, setCodeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [opponent, setOpponent] = useState(null);
+  const subscriptionRef = useRef(null);
 
-  const handleCopy = (text, setCopied) => {
+  const room = location.state?.room;
+
+  useEffect(() => {
+    if (!room) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    // If room already has an opponent (user joined as opponent), it might already be FULL
+    if (room.opponent) {
+      setOpponent(room.opponent);
+    }
+
+    // If room is already in a game state (FULL/PLACING_SHIPS), navigate to placement
+    if (room.status === "PLACING_SHIPS" || room.status === "FULL") {
+      // Room is full, game should have been created. We need the gameId.
+      // The ROOM_READY event provides gameId, but if we joined and got FULL status,
+      // we wait for ROOM_READY via WebSocket
+    }
+
+    // Connect WebSocket and subscribe to room events
+    ws.connect({
+      onConnect: () => {
+        subscriptionRef.current = ws.subscribe(
+          `/topic/room/${room.id}`,
+          handleRoomEvent,
+        );
+      },
+    });
+
+    return () => {
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+        subscriptionRef.current = null;
+      }
+      ws.disconnect();
+    };
+  }, []);
+
+  function handleRoomEvent(event) {
+    switch (event.event) {
+      case "PLAYER_JOINED":
+        setOpponent({ id: event.userId, nickname: event.nickname });
+        break;
+      case "ROOM_READY":
+        // Both players are in, game created. Navigate to ship placement.
+        navigate("/game/ship-placement", {
+          state: { gameId: event.gameId, roomId: room.id },
+          replace: true,
+        });
+        break;
+      case "PLAYER_LEFT":
+        setOpponent(null);
+        break;
+      default:
+        break;
+    }
+  }
+
+  async function handleCancel() {
+    setCanceling(true);
+    try {
+      await api.delete(`/rooms/${room.id}`);
+      navigate("/", { replace: true });
+    } catch {
+      navigate("/", { replace: true });
+    }
+  }
+
+  function handleCopy(text, setCopied) {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }
+
+  if (!room) return null;
+
+  const roomCode = room.code;
+  const shareLink = `${window.location.origin}/join/${roomCode}`;
+  const isHost = room.host?.id === user?.id;
+  const myNickname = user?.nickname || "Você";
+  const opponentNickname = opponent?.nickname || null;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
-      <LayoutPage interClassName="p-4  justify-center">
+      <LayoutPage interClassName="p-4 justify-center">
         <Card className="flex flex-col items-center gap-6 w-full max-w-lg p-6">
           <div className="flex flex-col items-center gap-3">
             <div className="relative">
@@ -37,10 +119,12 @@ function WaitingRoomPage() {
               </span>
             </div>
             <SectionTitle className="text-xl text-center">
-              Aguardando Oponente...
+              {opponentNickname ? "Oponente encontrado!" : "Aguardando Oponente..."}
             </SectionTitle>
             <p className="font-poppins font-light text-white/60 text-center text-sm">
-              Compartilhe o código ou link abaixo para convidar um amigo
+              {opponentNickname
+                ? "Preparando a batalha..."
+                : "Compartilhe o código ou link abaixo para convidar um amigo"}
             </p>
           </div>
 
@@ -50,7 +134,7 @@ function WaitingRoomPage() {
                 <CircleUserRound size={28} className="text-blue-300" />
               </div>
               <span className="font-poppins font-medium text-sm text-white">
-                Capitão Caio
+                {isHost ? myNickname : opponentNickname || myNickname}
               </span>
               <span className="font-poppins text-[10px] text-green-400 uppercase tracking-wider font-semibold">
                 Pronto
@@ -64,15 +148,31 @@ function WaitingRoomPage() {
             </div>
 
             <div className="flex flex-col items-center gap-2">
-              <div className="w-14 h-14 rounded-full bg-blue-dark-900 border-2 border-white/20 flex items-center justify-center animate-pulse">
-                <Loader size={24} className="text-white/30 animate-spin" />
-              </div>
-              <span className="font-poppins font-medium text-sm text-white/40">
-                ???
-              </span>
-              <span className="font-poppins text-[10px] text-white/30 uppercase tracking-wider">
-                Aguardando...
-              </span>
+              {opponentNickname ? (
+                <>
+                  <div className="w-14 h-14 rounded-full bg-blue-dark-900 border-2 border-orange-300 flex items-center justify-center">
+                    <CircleUserRound size={28} className="text-orange-300" />
+                  </div>
+                  <span className="font-poppins font-medium text-sm text-white">
+                    {isHost ? opponentNickname : myNickname}
+                  </span>
+                  <span className="font-poppins text-[10px] text-green-400 uppercase tracking-wider font-semibold">
+                    Pronto
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 rounded-full bg-blue-dark-900 border-2 border-white/20 flex items-center justify-center animate-pulse">
+                    <Loader size={24} className="text-white/30 animate-spin" />
+                  </div>
+                  <span className="font-poppins font-medium text-sm text-white/40">
+                    ???
+                  </span>
+                  <span className="font-poppins text-[10px] text-white/30 uppercase tracking-wider">
+                    Aguardando...
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -83,13 +183,13 @@ function WaitingRoomPage() {
             <div className="flex items-center gap-2">
               <div className="flex-1 flex items-center justify-center px-4 py-3 rounded-lg bg-blue-dark-900 border-2 border-blue-300/40">
                 <span className="font-anybody font-extrabold text-xl text-orange-300 tracking-widest select-all">
-                  {MOCK_ROOM_CODE}
+                  {roomCode}
                 </span>
               </div>
               <Button
                 variant="ghost"
                 className="w-auto! px-3! border-blue-300/40!"
-                onClick={() => handleCopy(MOCK_ROOM_CODE, setCodeCopied)}
+                onClick={() => handleCopy(roomCode, setCodeCopied)}
               >
                 <Copy
                   size={18}
@@ -112,13 +212,13 @@ function WaitingRoomPage() {
               <div className="flex-1 flex items-center px-4 py-3 rounded-lg bg-blue-dark-900 border-2 border-blue-300/40 overflow-hidden">
                 <Link size={14} className="text-white/40 shrink-0 mr-2" />
                 <span className="font-poppins text-sm text-white/70 truncate select-all">
-                  {MOCK_SHARE_LINK}
+                  {shareLink}
                 </span>
               </div>
               <Button
                 variant="ghost"
                 className="w-auto! px-3! border-blue-300/40!"
-                onClick={() => handleCopy(MOCK_SHARE_LINK, setLinkCopied)}
+                onClick={() => handleCopy(shareLink, setLinkCopied)}
               >
                 <Copy
                   size={18}
@@ -136,10 +236,15 @@ function WaitingRoomPage() {
           <Button
             variant="danger"
             className="flex items-center justify-center gap-2 border-red-500/50!"
-            onClick={() => navigate("/")}
+            onClick={handleCancel}
+            disabled={canceling}
           >
-            <X size={18} />
-            CANCELAR BATALHA
+            {canceling ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <X size={18} />
+            )}
+            {canceling ? "CANCELANDO..." : "CANCELAR BATALHA"}
           </Button>
         </Card>
       </LayoutPage>

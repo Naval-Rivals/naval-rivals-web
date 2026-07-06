@@ -41,7 +41,14 @@ function LoginPage() {
     setApiError("");
     try {
       await login(data);
-      navigate("/");
+      // Check if user was trying to join a room before login
+      const joinCode = sessionStorage.getItem("joinAfterLogin");
+      if (joinCode) {
+        sessionStorage.removeItem("joinAfterLogin");
+        navigate(`/join/${joinCode}`, { replace: true });
+      } else {
+        navigate("/");
+      }
     } catch (error) {
       if (error.status === 401) {
         setApiError("E-mail ou senha incorretos");

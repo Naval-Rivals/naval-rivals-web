@@ -12,6 +12,7 @@ import WaitingRoomPage from "../pages/WaitingRoomPage";
 import ShipPlacementPage from "../pages/ShipPlacementPage";
 import GamePage from "../pages/GamePage";
 import GameResultPage from "../pages/GameResultPage";
+import JoinPage from "../pages/JoinPage";
 
 function AppRoutes() {
   return (
@@ -24,6 +25,7 @@ function AppRoutes() {
         <Route path="/ranking" element={<RankingPage />} />
         <Route path="/about-us" element={<AboutUsPage />} />
         <Route path="/game/rules" element={<GameRulesPage />} />
+        <Route path="/join/:code" element={<JoinPage />} />
 
         {/* Rotas protegidas */}
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

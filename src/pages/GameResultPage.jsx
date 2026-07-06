@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import Header from "../components/layout/Header";
 import LayoutPage from "../components/layout/LayoutPage";
 import Card from "../components/ui/Card";
@@ -11,84 +12,183 @@ import {
   Droplets,
   Home,
   Swords,
+  Loader2,
+  Frown,
 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
+import { useAuth } from "../contexts/AuthContext";
+import { api } from "../services/api";
 
-// Dados mockados do resultado
-const RESULT = {
-  victory: true,
-  duration: "12:34",
-  player: {
-    name: "user123456",
-    totalShots: 42,
-    hits: 17,
-    misses: 25,
-    shipsDestroyed: 5,
-  },
-  opponent: {
-    name: "rivalPlayer",
-    totalShots: 38,
-    hits: 12,
-    misses: 26,
-    shipsDestroyed: 3,
-  },
-};
+function formatDuration(seconds) {
+  if (!seconds) return "00:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
 
 function GameResultPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+
+  const gameId = location.state?.gameId || sessionStorage.getItem("gameId");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [creatingRoom, setCreatingRoom] = useState(false);
+
+  useEffect(() => {
+    if (!gameId) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    sessionStorage.removeItem("gameId");
+
+    async function fetchResult() {
+      try {
+        const data = await api.get(`/games/${gameId}/result`);
+        setResult(data);
+      } catch (err) {
+        setError(err.message || "Erro ao carregar resultado");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchResult();
+  }, [gameId]);
+
+  async function handlePlayAgain() {
+    setCreatingRoom(true);
+    try {
+      const room = await api.post("/rooms");
+      navigate("/game/waiting-room", { state: { room } });
+    } catch {
+      navigate("/");
+    } finally {
+      setCreatingRoom(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="h-screen flex flex-col overflow-hidden">
+        <Header />
+        <LayoutPage interClassName="p-4 justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
+            <p className="font-poppins text-white/70">Carregando resultado...</p>
+          </div>
+        </LayoutPage>
+      </div>
+    );
+  }
+
+  if (error || !result) {
+    return (
+      <div className="h-screen flex flex-col overflow-hidden">
+        <Header />
+        <LayoutPage interClassName="p-4 justify-center">
+          <Card className="flex flex-col items-center gap-4 p-6 max-w-md">
+            <p className="font-poppins text-red-400 text-center">
+              {error || "Resultado não encontrado"}
+            </p>
+            <Button
+              variant="secondary"
+              className="flex items-center justify-center gap-2"
+              onClick={() => navigate("/")}
+            >
+              <Home size={18} />
+              Voltar ao Menu
+            </Button>
+          </Card>
+        </LayoutPage>
+      </div>
+    );
+  }
+
+  const isVictory = result.winner?.id === user?.id;
+  const myStats = isVictory ? result.winnerStats : result.loserStats;
+  const opponentStats = isVictory ? result.loserStats : result.winnerStats;
+  const myData = isVictory ? result.winner : result.loser;
+  const opponentData = isVictory ? result.loser : result.winner;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
       <LayoutPage interClassName="p-4 pb-8 justify-center">
-        {/* Resultado */}
         <Card className="flex flex-col items-center gap-6 w-full max-w-lg p-6">
-          {/* Ícone + Título */}
+          {/* Icon + Title */}
           <div className="flex flex-col items-center gap-3">
-            <div className="w-20 h-20 rounded-full bg-orange-500/20 border-2 border-orange-400 flex items-center justify-center">
-              <Trophy size={40} className="text-orange-300" />
+            <div
+              className={`w-20 h-20 rounded-full flex items-center justify-center ${
+                isVictory
+                  ? "bg-orange-500/20 border-2 border-orange-400"
+                  : "bg-red-500/20 border-2 border-red-400"
+              }`}
+            >
+              {isVictory ? (
+                <Trophy size={40} className="text-orange-300" />
+              ) : (
+                <Frown size={40} className="text-red-300" />
+              )}
             </div>
-            <h2 className="font-anybody font-extrabold text-3xl text-orange-300 uppercase tracking-wider">
-              Vitória!
+            <h2
+              className={`font-anybody font-extrabold text-3xl uppercase tracking-wider ${
+                isVictory ? "text-orange-300" : "text-red-300"
+              }`}
+            >
+              {isVictory ? "Vitória!" : "Derrota..."}
             </h2>
             <p className="font-poppins font-light text-white/60 text-sm text-center">
-              Você dominou os mares e afundou toda a frota inimiga!
+              {isVictory
+                ? "Você dominou os mares e afundou toda a frota inimiga!"
+                : "Sua frota foi destruída. Tente novamente, capitão!"}
             </p>
           </div>
 
-          {/* Placar */}
+          {/* Scoreboard */}
           <div className="flex items-center justify-center gap-6 w-full py-3 border-y border-white/10">
-            {/* Você */}
+            {/* You */}
             <div className="flex flex-col items-center gap-1">
               <div className="w-11 h-11 rounded-full bg-blue-dark-900 border-2 border-blue-300 flex items-center justify-center">
                 <CircleUserRound size={20} className="text-blue-300" />
               </div>
               <span className="font-poppins font-semibold text-xs text-white">
-                {RESULT.player.name}
+                {myData?.nickname || user?.nickname}
               </span>
-              <span className="font-anybody font-bold text-2xl text-green-400">
-                {RESULT.player.shipsDestroyed}
+              <span
+                className={`font-anybody font-bold text-2xl ${
+                  isVictory ? "text-green-400" : "text-red-400"
+                }`}
+              >
+                {myStats?.shipsDestroyed || 0}
               </span>
               <span className="font-poppins text-[10px] text-white/40">
                 navios afundados
               </span>
             </div>
 
-            {/* VS */}
+            {/* × */}
             <span className="font-anybody font-extrabold text-xl text-white/20">
               ×
             </span>
 
-            {/* Oponente */}
+            {/* Opponent */}
             <div className="flex flex-col items-center gap-1">
               <div className="w-11 h-11 rounded-full bg-blue-dark-900 border-2 border-orange-300/50 flex items-center justify-center">
                 <CircleUserRound size={20} className="text-orange-300/50" />
               </div>
               <span className="font-poppins font-semibold text-xs text-white/60">
-                {RESULT.opponent.name}
+                {opponentData?.nickname || "Oponente"}
               </span>
-              <span className="font-anybody font-bold text-2xl text-red-400">
-                {RESULT.opponent.shipsDestroyed}
+              <span
+                className={`font-anybody font-bold text-2xl ${
+                  isVictory ? "text-red-400" : "text-green-400"
+                }`}
+              >
+                {opponentStats?.shipsDestroyed || 0}
               </span>
               <span className="font-poppins text-[10px] text-white/40">
                 navios afundados
@@ -96,39 +196,44 @@ function GameResultPage() {
             </div>
           </div>
 
-          {/* Estatísticas */}
+          {/* Stats */}
           <div className="grid grid-cols-2 gap-3 w-full">
             <StatCard
               icon={<Clock size={18} className="text-blue-300" />}
               label="Tempo de Batalha"
-              value={RESULT.duration}
+              value={formatDuration(result.durationSeconds)}
             />
             <StatCard
               icon={<Target size={18} className="text-white/70" />}
               label="Tiros Totais"
-              value={RESULT.player.totalShots}
+              value={myStats?.shots || 0}
             />
             <StatCard
               icon={<Flame size={18} className="text-orange-400" />}
               label="Acertos"
-              value={RESULT.player.hits}
+              value={myStats?.hits || 0}
             />
             <StatCard
               icon={<Droplets size={18} className="text-blue-300/70" />}
               label="Erros"
-              value={RESULT.player.misses}
+              value={myStats?.misses || 0}
             />
           </div>
 
-          {/* Botões */}
+          {/* Buttons */}
           <div className="flex flex-col gap-3 w-full">
             <Button
               variant="primary"
               className="flex items-center justify-center gap-2"
-              onClick={() => navigate("/game/waiting-room")}
+              onClick={handlePlayAgain}
+              disabled={creatingRoom}
             >
-              <Swords size={18} />
-              JOGAR NOVAMENTE
+              {creatingRoom ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Swords size={18} />
+              )}
+              {creatingRoom ? "CRIANDO SALA..." : "JOGAR NOVAMENTE"}
             </Button>
             <Button
               variant="secondary"

@@ -4,18 +4,79 @@ import BottomNav from "../components/layout/BottomNav";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
-import { Swords, LogIn, Users, Anchor } from "lucide-react";
+import { Swords, LogIn, Users, Anchor, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { useAuth } from "../contexts/AuthContext";
+import { api } from "../services/api";
 import logo from "../assets/logo-naval-rivals.png";
 import Footer from "../components/layout/Footer";
+import AlertCard from "../components/ui/AlertCard";
 
 function HomePage() {
   const [roomCode, setRoomCode] = useState("");
+  const [creatingRoom, setCreatingRoom] = useState(false);
+  const [joiningRoom, setJoiningRoom] = useState(false);
+  const [alert, setAlert] = useState({ show: false, message: "", type: "error" });
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  async function handleCreateRoom() {
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    setCreatingRoom(true);
+    try {
+      const room = await api.post("/rooms");
+      navigate("/game/waiting-room", { state: { room } });
+    } catch (err) {
+      setAlert({ show: true, message: err.message || "Erro ao criar sala", type: "error" });
+    } finally {
+      setCreatingRoom(false);
+    }
+  }
+
+  async function handleJoinRoom(e) {
+    e?.preventDefault?.();
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    const code = roomCode.trim().toUpperCase();
+    if (!code) {
+      setAlert({ show: true, message: "Digite o código da sala", type: "error" });
+      return;
+    }
+
+    setJoiningRoom(true);
+    try {
+      const room = await api.post("/rooms/join", { code });
+      // If room already has a gameId (FULL status), go directly to ship placement
+      if (room.gameId) {
+        navigate("/game/ship-placement", { state: { gameId: room.gameId, roomId: room.id } });
+      } else {
+        navigate("/game/waiting-room", { state: { room } });
+      }
+    } catch (err) {
+      setAlert({ show: true, message: err.message || "Erro ao entrar na sala", type: "error" });
+    } finally {
+      setJoiningRoom(false);
+    }
+  }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden relative">
+      <AlertCard
+        show={alert.show}
+        onClose={() => setAlert({ ...alert, show: false })}
+        type={alert.type}
+      >
+        {alert.message}
+      </AlertCard>
+
       <Header />
       <LayoutPage interClassName="p-4 pb-20 md:pb-8">
         <div className="flex flex-col items-center gap-3 pt-4 pb-2 w-full">
@@ -42,14 +103,20 @@ function HomePage() {
             <Button
               variant="primary"
               className="flex items-center justify-center gap-2"
-              onClick={() => navigate("/game/waiting-room")}
+              onClick={handleCreateRoom}
+              disabled={creatingRoom}
             >
-              <Swords size={18} />
-              CRIAR BATALHA
+              {creatingRoom ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Swords size={18} />
+              )}
+              {creatingRoom ? "CRIANDO..." : "CRIAR BATALHA"}
             </Button>
             <Button
               variant="secondary"
               className="flex items-center justify-center gap-2"
+              disabled
             >
               <Users size={18} />
               BATALHA ALEATÓRIA
@@ -64,20 +131,29 @@ function HomePage() {
             <div className="flex-1 h-px bg-white/20" />
           </div>
 
-          <div className="flex flex-col sm:flex-row w-full gap-2">
+          <form
+            onSubmit={handleJoinRoom}
+            className="flex flex-col sm:flex-row w-full gap-2"
+          >
             <Input
               placeholder="Digite o código da sala"
               value={roomCode}
               onChange={(e) => setRoomCode(e.target.value)}
             />
             <Button
+              type="submit"
               variant="ghost"
               className="flex items-center justify-center gap-2 sm:w-auto sm:min-w-40 border-blue-300! text-blue-300!"
+              disabled={joiningRoom}
             >
-              <LogIn size={18} />
-              ENTRAR
+              {joiningRoom ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <LogIn size={18} />
+              )}
+              {joiningRoom ? "ENTRANDO..." : "ENTRAR"}
             </Button>
-          </div>
+          </form>
         </Card>
 
         <div className="grid grid-cols-3 gap-3 w-full">

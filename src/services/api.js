@@ -30,7 +30,7 @@ async function request(endpoint, options = {}) {
     );
   }
 
-  return res.status === 204 ? null : res.json();
+  return res.status === 204 ? null : res.text().then((text) => text ? JSON.parse(text) : null);
 }
 
 export const api = {
