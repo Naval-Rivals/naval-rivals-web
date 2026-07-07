@@ -12,6 +12,7 @@ import Input from "../components/ui/Input";
 import Label from "../components/ui/Label";
 import ErrorField from "../components/ui/ErrorField";
 import Button from "../components/ui/Button";
+import Spinner from "../components/ui/Spinner";
 
 const registerSchema = z
   .object({
@@ -63,6 +64,7 @@ function RegisterPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      {loading && <Spinner />}
       <AlertCard
         show={!!apiError}
         onClose={() => setApiError("")}

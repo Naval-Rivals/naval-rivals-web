@@ -8,6 +8,7 @@ import Card from "../components/ui/Card";
 import Footer from "../components/layout/Footer";
 import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+import Spinner from "../components/ui/Spinner";
 
 const PAGE_SIZE = 10;
 
@@ -106,7 +107,9 @@ function RankingPage() {
           </div>
 
           {/* Content */}
-          {loading && (
+          {loading && ranking.length === 0 && <Spinner />}
+
+          {loading && ranking.length > 0 && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
             </div>

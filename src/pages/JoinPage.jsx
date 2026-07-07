@@ -4,9 +4,10 @@ import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import Header from "../components/layout/Header";
 import LayoutPage from "../components/layout/LayoutPage";
-import { Loader2, AlertCircle, Home } from "lucide-react";
+import { AlertCircle, Home } from "lucide-react";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
+import Spinner from "../components/ui/Spinner";
 
 function JoinPage() {
   const { code } = useParams();
@@ -41,17 +42,7 @@ function JoinPage() {
   }, [code, isAuthenticated, navigate]);
 
   if (loading) {
-    return (
-      <div className="h-screen flex flex-col overflow-hidden">
-        <Header />
-        <LayoutPage interClassName="p-4 justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
-            <p className="font-poppins text-white/70">Entrando na sala {code}...</p>
-          </div>
-        </LayoutPage>
-      </div>
-    );
+    return <Spinner />;
   }
 
   if (error) {

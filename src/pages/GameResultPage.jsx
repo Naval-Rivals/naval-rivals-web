@@ -18,6 +18,7 @@ import {
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import Spinner from "../components/ui/Spinner";
 
 function formatDuration(seconds) {
   if (!seconds) return "00:00";
@@ -72,17 +73,7 @@ function GameResultPage() {
   }
 
   if (loading) {
-    return (
-      <div className="h-screen flex flex-col overflow-hidden">
-        <Header />
-        <LayoutPage interClassName="p-4 justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
-            <p className="font-poppins text-white/70">Carregando resultado...</p>
-          </div>
-        </LayoutPage>
-      </div>
-    );
+    return <Spinner />;
   }
 
   if (error || !result) {

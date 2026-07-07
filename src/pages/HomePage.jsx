@@ -12,6 +12,7 @@ import { api } from "../services/api";
 import logo from "../assets/logo-naval-rivals.png";
 import Footer from "../components/layout/Footer";
 import AlertCard from "../components/ui/AlertCard";
+import Spinner from "../components/ui/Spinner";
 
 function HomePage() {
   const [roomCode, setRoomCode] = useState("");
@@ -69,6 +70,7 @@ function HomePage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      {(creatingRoom || joiningRoom) && <Spinner />}
       <AlertCard
         show={alert.show}
         onClose={() => setAlert({ ...alert, show: false })}
