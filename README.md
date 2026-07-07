@@ -20,5 +20,4 @@ If you are developing a production application, we recommend using TypeScript wi
 - Torpedo (1x, tiro que afunda navio)
 - Radar (1x, verifica se tem navio em bloco 3x3)
 - Escudo (2x, proximo tiro recebido é bloqueado)
-- Contra-torpedo (1x, caso receba um torpedo depois de ativado, bloqueia)
 - EMP Naval - (1x, desativa habilidades do inimigo por 2 turnos)

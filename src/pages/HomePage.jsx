@@ -4,7 +4,7 @@ import BottomNav from "../components/layout/BottomNav";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
-import { Swords, LogIn, Users, Anchor, Loader2 } from "lucide-react";
+import { Swords, LogIn, Anchor, Loader2, Zap, Users } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
@@ -22,7 +22,7 @@ function HomePage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
-  async function handleCreateRoom() {
+  async function handleCreateRoom(gameMode) {
     if (!isAuthenticated) {
       navigate("/login");
       return;
@@ -30,7 +30,7 @@ function HomePage() {
 
     setCreatingRoom(true);
     try {
-      const room = await api.post("/rooms");
+      const room = await api.post("/rooms", { gameMode });
       navigate("/game/waiting-room", { state: { room } });
     } catch (err) {
       setAlert({ show: true, message: err.message || "Erro ao criar sala", type: "error" });
@@ -55,9 +55,10 @@ function HomePage() {
     setJoiningRoom(true);
     try {
       const room = await api.post("/rooms/join", { code });
-      // If room already has a gameId (FULL status), go directly to ship placement
       if (room.gameId) {
-        navigate("/game/ship-placement", { state: { gameId: room.gameId, roomId: room.id, opponentNickname: room.host?.nickname } });
+        navigate("/game/ship-placement", {
+          state: { gameId: room.gameId, roomId: room.id, opponentNickname: room.host?.nickname, gameMode: room.gameMode },
+        });
       } else {
         navigate("/game/waiting-room", { state: { room } });
       }
@@ -105,7 +106,7 @@ function HomePage() {
             <Button
               variant="primary"
               className="flex items-center justify-center gap-2"
-              onClick={handleCreateRoom}
+              onClick={() => handleCreateRoom("CLASSIC")}
               disabled={creatingRoom}
             >
               {creatingRoom ? (
@@ -113,16 +114,43 @@ function HomePage() {
               ) : (
                 <Swords size={18} />
               )}
-              {creatingRoom ? "CRIANDO..." : "CRIAR BATALHA"}
+              {creatingRoom ? "CRIANDO..." : "BATALHA CLÁSSICA"}
             </Button>
             <Button
               variant="secondary"
-              className="flex items-center justify-center gap-2"
-              disabled
+              className="flex items-center justify-center gap-2 border-yellow-400/50! text-yellow-300!"
+              onClick={() => handleCreateRoom("TACTICAL")}
+              disabled={creatingRoom}
             >
-              <Users size={18} />
-              BATALHA ALEATÓRIA
+              {creatingRoom ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Zap size={18} />
+              )}
+              {creatingRoom ? "CRIANDO..." : "BATALHA TÁTICA"}
             </Button>
+          </div>
+
+          {/* Explicação dos modos */}
+          <div className="flex flex-col sm:flex-row w-full gap-2">
+            <div className="flex-1 flex items-start gap-2 p-3 rounded-lg bg-blue-300/5 border border-blue-300/15">
+              <Swords size={14} className="text-blue-300 shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-poppins font-semibold text-[11px] text-blue-300">Clássico</span>
+                <span className="font-poppins text-[10px] text-white/50 leading-relaxed">
+                  Batalha naval tradicional. Alterne tiros com o oponente e afunde toda a frota inimiga.
+                </span>
+              </div>
+            </div>
+            <div className="flex-1 flex items-start gap-2 p-3 rounded-lg bg-yellow-400/5 border border-yellow-400/15">
+              <Zap size={14} className="text-yellow-300 shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-poppins font-semibold text-[11px] text-yellow-300">Tático</span>
+                <span className="font-poppins text-[10px] text-white/50 leading-relaxed">
+                  Modo clássico + 4 habilidades especiais: Torpedo, Radar, Escudo e EMP Naval.
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center w-full gap-3">

@@ -13,6 +13,7 @@ const CELL_SIZE = 33;
  * - hit: acerto em navio inimigo
  * - miss: tiro na água (erro)
  * - sunk: navio afundado
+ * - radar: célula revelada por radar (navio detectado)
  */
 const CELL_STYLES = {
   empty: "bg-blue-dark-900/40",
@@ -20,130 +21,65 @@ const CELL_STYLES = {
   hit: "bg-orange-500/40 border-orange-400/30",
   miss: "bg-white/10 border-white/20",
   sunk: "bg-red-500/10 border-red-400/20",
+  radar: "bg-green-400/20 border-green-400/30",
 };
 
 const CELL_INDICATORS = {
   empty: null,
-  ship: null, // Ship SVG handles this now
+  ship: null,
   hit: (
     <svg width="18" height="18" viewBox="0 0 18 18">
       <circle cx="9" cy="9" r="4" fill="#fb923c" />
-      <line
-        x1="9"
-        y1="1"
-        x2="9"
-        y2="4"
-        stroke="#fb923c"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="9"
-        y1="14"
-        x2="9"
-        y2="17"
-        stroke="#fb923c"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="1"
-        y1="9"
-        x2="4"
-        y2="9"
-        stroke="#fb923c"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="14"
-        y1="9"
-        x2="17"
-        y2="9"
-        stroke="#fb923c"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="3.5"
-        y1="3.5"
-        x2="5.5"
-        y2="5.5"
-        stroke="#fb923c"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="12.5"
-        y1="12.5"
-        x2="14.5"
-        y2="14.5"
-        stroke="#fb923c"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="14.5"
-        y1="3.5"
-        x2="12.5"
-        y2="5.5"
-        stroke="#fb923c"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <line
-        x1="5.5"
-        y1="12.5"
-        x2="3.5"
-        y2="14.5"
-        stroke="#fb923c"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
+      <line x1="9" y1="1" x2="9" y2="4" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" />
+      <line x1="9" y1="14" x2="9" y2="17" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" />
+      <line x1="1" y1="9" x2="4" y2="9" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" />
+      <line x1="14" y1="9" x2="17" y2="9" stroke="#fb923c" strokeWidth="2" strokeLinecap="round" />
+      <line x1="3.5" y1="3.5" x2="5.5" y2="5.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="12.5" y1="12.5" x2="14.5" y2="14.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="14.5" y1="3.5" x2="12.5" y2="5.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="5.5" y1="12.5" x2="3.5" y2="14.5" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   ),
   miss: (
     <svg width="12" height="12" viewBox="0 0 12 12" className="opacity-50">
-      <line
-        x1="2"
-        y1="2"
-        x2="10"
-        y2="10"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <line
-        x1="10"
-        y1="2"
-        x2="2"
-        y2="10"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <line x1="2" y1="2" x2="10" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round" />
+      <line x1="10" y1="2" x2="2" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round" />
     </svg>
   ),
-  sunk: null, // Skull is rendered on the ShipOverlay
+  sunk: null,
+  radar: (
+    <svg width="14" height="14" viewBox="0 0 14 14" className="opacity-80">
+      <circle cx="7" cy="7" r="3" fill="none" stroke="#4ade80" strokeWidth="1.5" />
+      <circle cx="7" cy="7" r="1.5" fill="#4ade80" />
+    </svg>
+  ),
 };
 
 /**
  * GameBoard - Tabuleiro 10x10 reutilizável para Naval Rivals
  *
  * Props:
- * - cells: objeto com chaves "A1", "B3", etc. e valores: "empty" | "ship" | "hit" | "miss" | "sunk"
+ * - cells: objeto com chaves "A1", "B3", etc. e valores: "empty" | "ship" | "hit" | "miss" | "sunk" | "radar"
  * - ships: array de navios para renderizar SVGs. Formato:
  *   [{ type, positions: [{col: "A", row: 1}, ...], sunk: bool }]
  * - onCellClick: (col, row) => void (opcional)
+ * - onCellHover: (col, row) => void (opcional) - para radar preview
+ * - onCellLeave: () => void (opcional) - para limpar hover
+ * - hoverCells: Set ou array de cellKeys para highlight temporário (radar preview)
  * - className: classes adicionais para o container (opcional)
  */
 function GameBoard({
   cells = {},
   ships = [],
   onCellClick,
+  onCellHover,
+  onCellLeave,
+  hoverCells,
   className = "",
   children,
 }) {
+  const hoverSet = hoverCells instanceof Set ? hoverCells : new Set(hoverCells || []);
+
   const getCellState = (col, row) => {
     return cells[`${col}${row}`] || "empty";
   };
@@ -182,17 +118,25 @@ function GameBoard({
         </div>
 
         {/* Grid de células com overlay de navios */}
-        <div className="relative flex-1">
+        <div
+          className="relative flex-1"
+          onMouseLeave={() => onCellLeave?.()}
+        >
           {/* Cells grid */}
           <div className="grid grid-cols-10 rounded-md overflow-hidden">
             {ROWS.map((row) =>
               COLUMNS.map((col) => {
                 const state = getCellState(col, row);
+                const cellKey = `${col}${row}`;
+                const isHovered = hoverSet.has(cellKey);
                 return (
                   <div
-                    key={`${col}${row}`}
+                    key={cellKey}
                     onClick={() => onCellClick?.(col, row)}
-                    className={`h-[33px] border border-blue-300/10 flex items-center justify-center transition-colors cursor-pointer hover:bg-blue-300/10 ${CELL_STYLES[state] || CELL_STYLES.empty}`}
+                    onMouseEnter={() => onCellHover?.(col, row)}
+                    className={`h-[33px] border border-blue-300/10 flex items-center justify-center transition-colors cursor-pointer hover:bg-blue-300/10 ${CELL_STYLES[state] || CELL_STYLES.empty} ${
+                      isHovered ? "bg-green-400/25! border-green-400/40!" : ""
+                    }`}
                   >
                     {CELL_INDICATORS[state]}
                   </div>

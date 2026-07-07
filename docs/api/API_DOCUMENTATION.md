@@ -112,7 +112,7 @@ CLASSIC | TACTICAL
 
 ### AbilityType (Tactical Mode only)
 ```
-TORPEDO | RADAR | SHIELD | COUNTER_TORPEDO | EMP_NAVAL
+TORPEDO | RADAR | SHIELD | EMP_NAVAL
 ```
 
 ### ShipType
@@ -665,8 +665,6 @@ Get the current game state from the player's perspective.
     "radarAvailable": true,
     "shieldCharges": 2,
     "shieldActive": false,
-    "counterTorpedoAvailable": true,
-    "counterTorpedoActive": false,
     "empNavalAvailable": true,
     "empDisabledTurns": 0
   }
@@ -689,8 +687,6 @@ Get the current game state from the player's perspective.
 | radarAvailable | boolean | Whether radar can still be used (1 use) |
 | shieldCharges | int | Remaining shield activations (starts at 2) |
 | shieldActive | boolean | Whether a shield is currently active (blocks next incoming shot) |
-| counterTorpedoAvailable | boolean | Whether counter-torpedo can still be used (1 use) |
-| counterTorpedoActive | boolean | Whether counter-torpedo is currently active (blocks next incoming torpedo) |
 | empNavalAvailable | boolean | Whether EMP can still be used (1 use) |
 | empDisabledTurns | int | Turns remaining where YOUR abilities are disabled (by opponent's EMP) |
 
@@ -1207,7 +1203,7 @@ Published when a player activates their shield. Both players see this.
 
 #### SHIELD_BLOCKED
 
-Published when an incoming shot is blocked by an active shield.
+Published when an incoming shot (normal or torpedo) is blocked by an active shield. This event is published **before** the `ATTACK_RESULT` event.
 
 ```json
 {
@@ -1225,49 +1221,12 @@ Published when an incoming shot is blocked by an active shield.
 | defenderId | UUID | Player whose shield blocked the shot |
 | cell | String | The cell that was targeted |
 
-**Frontend action:** Show shield-block animation. The shot registers as a miss even if it would have hit a ship.
+**Event order when shield blocks:**
+1. `SHIELD_BLOCKED` — shield consumed
+2. `ATTACK_RESULT` — `hit: false` (miss, regardless of whether it would have hit a ship)
+3. `TURN_CHANGE` — turn passes to opponent (since hit is false)
 
----
-
-#### COUNTER_TORPEDO_ACTIVATED
-
-Published when a player activates their counter-torpedo. Both players see this.
-
-```json
-{
-  "event": "COUNTER_TORPEDO_ACTIVATED",
-  "gameId": "660e8400-e29b-41d4-a716-446655440000",
-  "payload": {
-    "playerId": "550e8400-e29b-41d4-a716-446655440000"
-  }
-}
-```
-
-**Frontend action:** Show counter-torpedo indicator on the player's board. Opponent knows a counter-torpedo is active.
-
----
-
-#### COUNTER_TORPEDO_BLOCKED
-
-Published when an incoming torpedo is blocked by an active counter-torpedo.
-
-```json
-{
-  "event": "COUNTER_TORPEDO_BLOCKED",
-  "gameId": "660e8400-e29b-41d4-a716-446655440000",
-  "payload": {
-    "defenderId": "550e8400-e29b-41d4-a716-446655440000",
-    "cell": "C4"
-  }
-}
-```
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| defenderId | UUID | Player whose counter-torpedo blocked the attack |
-| cell | String | The cell that was targeted by the torpedo |
-
-**Frontend action:** Show counter-torpedo block animation. The torpedo is wasted and registers as a miss.
+**Frontend action:** Show shield-block animation. The shot registers as a miss even if it would have hit a ship. After this event, the shield is consumed (`shieldActive = false`).
 
 ---
 
@@ -1383,14 +1342,13 @@ Published when a player uses their EMP Naval. Both players see this.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| ability | String | Required. One of: `"SHIELD"`, `"COUNTER_TORPEDO"`, `"RADAR"`, `"EMP_NAVAL"` |
+| ability | String | Required. One of: `"SHIELD"`, `"RADAR"`, `"EMP_NAVAL"` |
 | cell | String | Required for RADAR (center of 3×3 scan). Not needed for other abilities. |
 
 **Turn consumption rules:**
 | Ability | Consumes Turn | Description |
 |---------|---------------|-------------|
 | SHIELD | ❌ No | Activate before attacking — you still attack this turn |
-| COUNTER_TORPEDO | ❌ No | Activate before attacking — you still attack this turn |
 | RADAR | ✅ Yes | Replaces your attack for this turn |
 | EMP_NAVAL | ✅ Yes | Replaces your attack for this turn |
 
@@ -1406,7 +1364,6 @@ Published when a player uses their EMP Naval. Both players see this.
 - `"Não é o turno desse jogador"` — not your turn
 - `"Habilidades desativadas por EMP"` — affected by EMP
 - `"Escudo não disponível"` — no shield charges left
-- `"Contra-torpedo já foi utilizado"` — already used
 - `"Radar já foi utilizado"` — already used
 - `"EMP Naval já foi utilizado"` — already used
 - `"Posição central do radar é obrigatória"` — radar used without cell
@@ -1663,8 +1620,7 @@ The game mode is chosen by the **room host** when creating the room (`"gameMode"
 |---------|------|---------------|--------|
 | **Torpedo** | 1× | Yes (attack) | Instantly sinks the entire ship if it hits. If it misses, behaves like a normal shot. |
 | **Radar** | 1× | Yes | Scans a 3×3 area centered on the chosen cell. Reveals which cells contain ships (without revealing ship type). |
-| **Shield** | 2× | No | Activates a shield on your board. The next incoming shot is blocked (registers as miss even if it would hit). Also blocks torpedoes if counter-torpedo is not active. |
-| **Counter-Torpedo** | 1× | No | Activates a counter-torpedo defense. If the opponent fires a torpedo at you while active, it's blocked (registers as miss). Consumed on use. |
+| **Shield** | 2× | No | Activates a shield on your board. The next incoming shot is blocked (registers as miss even if it would hit). Also blocks torpedoes. |
 | **EMP Naval** | 1× | Yes | Disables ALL abilities of the opponent for their next 2 turns. They can only fire normal shots during that time. |
 
 ### Detailed Ability Rules
@@ -1672,7 +1628,7 @@ The game mode is chosen by the **room host** when creating the room (`"gameMode"
 #### Torpedo (Attack)
 - Used via the **attack endpoint** with `"type": "TORPEDO"` (same as Classic mode)
 - If EMP is active on the shooter, torpedo cannot be used
-- **Blocked by:** Counter-Torpedo (priority 1), then Shield (priority 2)
+- **Blocked by:** Shield
 - If blocked, the torpedo is consumed but registers as a miss
 
 #### Radar (Utility)
@@ -1689,22 +1645,14 @@ The game mode is chosen by the **room host** when creating the room (`"gameMode"
 - Only **one shield can be active** at a time (cannot stack)
 - 2 total charges per match (can activate shield twice across the game)
 - **Does NOT consume the turn** — player can still attack normally after activating
-- Blocks both normal shots AND torpedoes (if counter-torpedo isn't active)
+- Blocks both normal shots AND torpedoes
 - Once triggered (shot blocked), the shield is consumed
-
-#### Counter-Torpedo (Defensive)
-- Used via the **ability endpoint** with `"ability": "COUNTER_TORPEDO"` (no cell needed)
-- Activates immediately — stays active until an opponent fires a torpedo at this board
-- **Does NOT consume the turn** — player can still attack normally after activating
-- Only blocks **torpedoes** (not normal shots)
-- If both counter-torpedo AND shield are active, counter-torpedo takes priority for torpedo attacks
-- Once triggered (torpedo blocked), the counter-torpedo is consumed
 
 #### EMP Naval (Offensive)
 - Used via the **ability endpoint** with `"ability": "EMP_NAVAL"` (no cell needed)
 - Immediately disables the opponent's abilities for their **next 2 turns**
-- During those 2 turns, the opponent cannot: use torpedo, use radar, activate shield, activate counter-torpedo, or use EMP
-- Already-active defenses (shield, counter-torpedo) remain active — EMP only prevents NEW activations
+- During those 2 turns, the opponent cannot: use torpedo, use radar, activate shield, or use EMP
+- Already-active defenses (shield) remain active — EMP only prevents NEW activations
 - The EMP counter decrements at the **start of each affected turn**
 - **Consumes the turn** — the player cannot attack after using EMP
 
@@ -1714,21 +1662,26 @@ When a shot or torpedo hits a board with active defenses:
 
 ```
 Incoming TORPEDO:
-  1. Check Counter-Torpedo → if active, BLOCK (counter-torpedo consumed)
-  2. Check Shield → if active, BLOCK (shield consumed)
-  3. Normal torpedo logic (hit = sink ship, miss = miss)
+  1. Check Shield → if active, BLOCK (shield consumed)
+  2. Normal torpedo logic (hit = sink ship, miss = miss)
 
 Incoming NORMAL shot:
   1. Check Shield → if active, BLOCK (shield consumed, registers as miss)
   2. Normal shot logic (hit or miss)
 ```
 
+**Event publication order when blocked:**
+```
+SHIELD_BLOCKED → ATTACK_RESULT (hit: false) → TURN_CHANGE
+```
+
+Only ONE block event is emitted per attack. The `ATTACK_RESULT` always follows with `hit: false`.
+
 ### Tactical Mode — Turn Structure
 
 ```
 Your Turn:
   ├── [Optional] Activate SHIELD (does not end turn)
-  ├── [Optional] Activate COUNTER_TORPEDO (does not end turn)
   └── Choose ONE of:
       ├── Normal attack → send to /app/game/{gameId}/attack
       ├── Torpedo attack → send to /app/game/{gameId}/attack with type "TORPEDO"
@@ -1749,7 +1702,6 @@ Turn 1 (Player A):
   → Turn passes to Player B
 
 Turn 2 (Player B):
-  → Activates COUNTER_TORPEDO (no turn consumed)
   → Fires TORPEDO at E5 (hit! Sinks CRUISER)
   → Gets another turn
   → Uses RADAR centered at H5
@@ -1779,7 +1731,7 @@ Turn 5 (Player A):
 |-------|-------------------|-----------------|
 | `/topic/room/{roomId}` | After creating/joining room | PLAYER_JOINED, ROOM_READY, PLAYER_LEFT |
 | `/topic/game/{gameId}/placement` | After receiving ROOM_READY | OPPONENT_READY, GAME_STARTED |
-| `/topic/game/{gameId}/events` | After ROOM_READY or GAME_STARTED | ATTACK_RESULT, TURN_CHANGE, TURN_TIMEOUT, SHIP_SUNK, GAME_OVER, OPPONENT_DISCONNECTED, OPPONENT_RECONNECTED, SHIELD_ACTIVATED, SHIELD_BLOCKED, COUNTER_TORPEDO_ACTIVATED, COUNTER_TORPEDO_BLOCKED, RADAR_USED, EMP_ACTIVATED |
+| `/topic/game/{gameId}/events` | After ROOM_READY or GAME_STARTED | ATTACK_RESULT, TURN_CHANGE, TURN_TIMEOUT, SHIP_SUNK, GAME_OVER, OPPONENT_DISCONNECTED, OPPONENT_RECONNECTED, SHIELD_ACTIVATED, SHIELD_BLOCKED, RADAR_USED, EMP_ACTIVATED |
 | `/topic/game/{gameId}/attack` | (optional, legacy) | AttackResponse flat object |
 
 ## Quick Reference: All Messages (Client → Server)

@@ -5,6 +5,8 @@ import Card from "../components/ui/Card";
 import ModalInfo from "../components/ui/ModalInfo";
 import GameBoard from "../components/game/GameBoard";
 import ExplosionEffect from "../components/game/ExplosionEffect";
+import AbilityPanel from "../components/game/AbilityPanel";
+import BattleToast from "../components/game/BattleToast";
 import {
   CircleUserRound,
   Clock,
@@ -12,33 +14,58 @@ import {
   Flame,
   Droplets,
   Loader2,
-  Wifi,
   WifiOff,
-  Rocket,
+  Shield,
+  Radar,
+  Radio,
+  Zap,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { ws } from "../services/websocket";
 
-// Convert API position {row, col} to board cell notation
-// API row 0-9 = letters A-J, API col 0-9 = numbers 1-10
 const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
 function apiToCell(row, col) {
   return `${COLUMNS[row]}${col + 1}`;
 }
 
-// Convert cell notation "A1" to {col: "A", row: 1} for GameBoard
 function parseCellNotation(cell) {
   const letter = cell.charAt(0);
   const number = parseInt(cell.substring(1));
   return { col: letter, row: number };
 }
 
-// Convert GameBoard click (col letter, row number) to cell notation for API
 function boardClickToCell(col, row) {
   return `${col}${row}`;
+}
+
+function getShipName(type) {
+  const names = {
+    CARRIER: "Porta-aviões",
+    BATTLESHIP: "Navio-tanque",
+    CRUISER: "Cruzador",
+    SUBMARINE: "Submarino",
+    DESTROYER: "Destroyer",
+  };
+  return names[type] || type;
+}
+
+function getRadarCells(col, row) {
+  const colIdx = COLUMNS.indexOf(col);
+  const rowIdx = row - 1;
+  const cells = [];
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      const newCol = colIdx + dc;
+      const newRow = rowIdx + dr;
+      if (newCol >= 0 && newCol < 10 && newRow >= 0 && newRow < 10) {
+        cells.push(`${COLUMNS[newCol]}${newRow + 1}`);
+      }
+    }
+  }
+  return cells;
 }
 
 function GamePage() {
@@ -47,9 +74,12 @@ function GamePage() {
   const { user } = useAuth();
   const subscriptionRef = useRef(null);
   const timerRef = useRef(null);
+  const blockedCellRef = useRef(null); // tracks cell blocked by shield
 
   const gameId = location.state?.gameId || sessionStorage.getItem("gameId");
   const initialFirstTurn = location.state?.firstTurn;
+  const gameMode =
+    location.state?.gameMode || sessionStorage.getItem("gameMode") || "CLASSIC";
 
   const [loading, setLoading] = useState(true);
   const [myBoard, setMyBoard] = useState({});
@@ -73,7 +103,31 @@ function GamePage() {
   const [torpedoMode, setTorpedoMode] = useState(false);
   const [explosions, setExplosions] = useState([]);
 
+  // Tactical mode state
+  const [abilities, setAbilities] = useState({
+    radarAvailable: true,
+    shieldCharges: 2,
+    shieldActive: false,
+    empNavalAvailable: true,
+    empDisabledTurns: 0,
+  });
+  const [radarMode, setRadarMode] = useState(false);
+  const [radarHoverCells, setRadarHoverCells] = useState([]);
+  const [toasts, setToasts] = useState([]);
+
   const isMyTurn = currentTurn === user?.id;
+  const isTactical = gameMode === "TACTICAL";
+
+  let toastIdCounter = useRef(0);
+
+  function addToast(message, icon, color) {
+    const id = `toast-${Date.now()}-${toastIdCounter.current++}`;
+    setToasts((prev) => [...prev.slice(-4), { id, message, icon, color }]);
+  }
+
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   // Fetch game state and connect WebSocket
   useEffect(() => {
@@ -83,6 +137,7 @@ function GamePage() {
     }
 
     sessionStorage.setItem("gameId", gameId);
+    sessionStorage.setItem("gameMode", gameMode);
     if (location.state?.opponentNickname) {
       sessionStorage.setItem(
         "opponentNickname",
@@ -90,7 +145,6 @@ function GamePage() {
       );
     }
 
-    // Warn user before leaving during active game
     function handleBeforeUnload(e) {
       e.preventDefault();
       e.returnValue = "";
@@ -141,7 +195,6 @@ function GamePage() {
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
-
     if (loading || disconnected) return;
 
     setTimeLeft(60);
@@ -160,8 +213,24 @@ function GamePage() {
     };
   }, [currentTurn, loading, disconnected]);
 
+  // Reconnect countdown
+  useEffect(() => {
+    if (!disconnected || reconnectTime <= 0) return;
+
+    const interval = setInterval(() => {
+      setReconnectTime((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [disconnected, reconnectTime]);
+
   function buildBoardFromState(state) {
-    // Build my board: ships + shots received
     const myCells = {};
     const fleet = [];
     const shipsWithPositions = [];
@@ -191,7 +260,6 @@ function GamePage() {
       }
     }
 
-    // Override with shots received
     for (const shot of state.myShotsReceived || []) {
       const cellKey = apiToCell(shot.position.row, shot.position.col);
       if (shot.hit) {
@@ -208,12 +276,15 @@ function GamePage() {
     setMyFleet(fleet);
     setMyShips(shipsWithPositions);
 
-    // Set torpedo availability
     if (state.torpedoAvailable !== undefined) {
       setTorpedoAvailable(state.torpedoAvailable);
     }
 
-    // Build enemy board: shots made
+    // Load tactical abilities
+    if (state.abilities) {
+      setAbilities(state.abilities);
+    }
+
     const enemyCells = {};
     for (const shot of state.myShotsMade || []) {
       const cellKey = apiToCell(shot.position.row, shot.position.col);
@@ -221,7 +292,6 @@ function GamePage() {
     }
     setEnemyBoard(enemyCells);
 
-    // Initialize enemy fleet as unknown
     setEnemyFleet([
       { type: "CARRIER", name: "Porta-aviões", size: 5, status: "unknown" },
       { type: "BATTLESHIP", name: "Navio-tanque", size: 4, status: "unknown" },
@@ -233,24 +303,14 @@ function GamePage() {
 
   function handleGameEvent(event) {
     const { payload } = event;
+    console.log("[GameEvent]", event.event, payload);
 
     switch (event.event) {
       case "ATTACK_RESULT":
         handleAttackResult(payload);
         break;
       case "TURN_CHANGE":
-        // Auto-switch tab on mobile when turn changes to a different player
-        if (payload.nextTurn !== currentTurn) {
-          if (payload.nextTurn === user?.id) {
-            setActiveTab("enemy"); // My turn: show enemy board to attack
-          } else {
-            setActiveTab("my"); // Opponent's turn: show my board to watch
-          }
-        }
-        setCurrentTurn(payload.nextTurn);
-        setTimeLeft(payload.turnTimeout || 60);
-        setAttackingCell(null);
-        setTorpedoMode(false);
+        handleTurnChange(payload);
         break;
       case "TURN_TIMEOUT":
         setAttackingCell(null);
@@ -269,8 +329,47 @@ function GamePage() {
         setDisconnected(false);
         setReconnectTime(0);
         break;
+      // Tactical events
+      case "SHIELD_ACTIVATED":
+        handleShieldActivated(payload);
+        break;
+      case "SHIELD_BLOCKED":
+        handleShieldBlocked(payload);
+        break;
+      case "RADAR_USED":
+        handleRadarUsed(payload);
+        break;
+      case "EMP_ACTIVATED":
+        handleEmpActivated(payload);
+        break;
       default:
         break;
+    }
+  }
+
+  function handleTurnChange(payload) {
+    if (payload.nextTurn !== currentTurn) {
+      if (payload.nextTurn === user?.id) {
+        setActiveTab("enemy");
+      } else {
+        setActiveTab("my");
+      }
+    }
+    setCurrentTurn(payload.nextTurn);
+    setTimeLeft(payload.turnTimeout || 60);
+    setAttackingCell(null);
+    setTorpedoMode(false);
+    setRadarMode(false);
+    setRadarHoverCells([]);
+
+    // Decrement EMP if it's now my turn and I'm affected
+    if (payload.nextTurn === user?.id) {
+      setAbilities((prev) => {
+        if (prev.empDisabledTurns > 0) {
+          return { ...prev, empDisabledTurns: prev.empDisabledTurns - 1 };
+        }
+        return prev;
+      });
     }
   }
 
@@ -279,14 +378,18 @@ function GamePage() {
     const { col, row } = parseCellNotation(cell);
     const cellKey = `${col}${row}`;
 
+    // Se esta célula foi bloqueada por escudo, ignorar o ATTACK_RESULT
+    if (blockedCellRef.current === cellKey) {
+      blockedCellRef.current = null;
+      return;
+    }
+
     if (attackerId === user?.id) {
-      // My attack on enemy board - don't overwrite "sunk" cells
       setEnemyBoard((prev) => {
         if (prev[cellKey] === "sunk") return prev;
         return { ...prev, [cellKey]: hit ? "hit" : "miss" };
       });
     } else {
-      // Enemy attack on my board - don't overwrite "sunk" cells
       setMyBoard((prev) => {
         if (prev[cellKey] === "sunk") return prev;
         return { ...prev, [cellKey]: hit ? "hit" : "miss" };
@@ -297,8 +400,9 @@ function GamePage() {
   function handleShipSunk(payload) {
     const { ownerId, shipType, positions } = payload;
 
-    // Trigger explosion animation positioned over the sunk ship
-    const parsedPositions = positions.map((cellNotation) => parseCellNotation(cellNotation));
+    const parsedPositions = positions.map((cellNotation) =>
+      parseCellNotation(cellNotation),
+    );
     const colIndices = parsedPositions.map((p) => COLUMNS.indexOf(p.col));
     const rowIndices = parsedPositions.map((p) => p.row - 1);
     const minCol = Math.min(...colIndices);
@@ -319,14 +423,12 @@ function GamePage() {
     setExplosions((prev) => [...prev, explosion]);
 
     if (ownerId === user?.id) {
-      // My ship was sunk
       setMyFleet((prev) =>
         prev.map((s) => (s.type === shipType ? { ...s, sunk: true } : s)),
       );
       setMyShips((prev) =>
         prev.map((s) => (s.type === shipType ? { ...s, sunk: true } : s)),
       );
-      // Mark cells as sunk on my board (all at once)
       const sunkCells = {};
       for (const cellNotation of positions) {
         const { col, row } = parseCellNotation(cellNotation);
@@ -334,7 +436,6 @@ function GamePage() {
       }
       setMyBoard((prev) => ({ ...prev, ...sunkCells }));
     } else {
-      // Enemy ship was sunk
       const sunkPositions = positions.map((cellNotation) => {
         const { col, row } = parseCellNotation(cellNotation);
         return { col, row };
@@ -347,8 +448,6 @@ function GamePage() {
         ...prev,
         { type: shipType, positions: sunkPositions, sunk: true },
       ]);
-      // Mark cells as sunk on enemy board
-      // Mark cells as sunk on enemy board (all at once)
       const sunkCells = {};
       for (const cellNotation of positions) {
         const { col, row } = parseCellNotation(cellNotation);
@@ -361,7 +460,7 @@ function GamePage() {
   function handleGameOver(payload) {
     sessionStorage.removeItem("gameId");
     sessionStorage.removeItem("opponentNickname");
-    // Disconnect WebSocket immediately to prevent reconnect attempts
+    sessionStorage.removeItem("gameMode");
     if (subscriptionRef.current) {
       subscriptionRef.current.unsubscribe();
       subscriptionRef.current = null;
@@ -373,12 +472,91 @@ function GamePage() {
     });
   }
 
+  // --- Tactical ability handlers ---
+
+  function handleShieldActivated(payload) {
+    if (payload.playerId === user?.id) {
+      // Sincroniza com o servidor (o toast já foi exibido no optimistic update)
+      setAbilities((prev) => ({
+        ...prev,
+        shieldActive: true,
+        shieldCharges: payload.remainingCharges,
+      }));
+    }
+    // Se do oponente, não mostrar nada — o jogador não deve saber
+  }
+
+  function handleShieldBlocked(payload) {
+    const { col, row } = parseCellNotation(payload.cell);
+    const cellKey = `${col}${row}`;
+    // Marca a célula como bloqueada para que o próximo ATTACK_RESULT seja ignorado
+    blockedCellRef.current = cellKey;
+
+    if (payload.defenderId === user?.id) {
+      // Meu escudo bloqueou ataque do oponente
+      setAbilities((prev) => ({ ...prev, shieldActive: false }));
+      addToast("SEU ESCUDO BLOQUEOU O ATAQUE!", <Shield size={16} />, "blue");
+    } else {
+      // Meu tiro foi bloqueado pelo escudo do oponente
+      addToast("ESCUDO INIMIGO BLOQUEOU SEU TIRO!", <Shield size={16} />, "blue");
+    }
+  }
+
+  function handleRadarUsed(payload) {
+    if (payload.playerId === user?.id) {
+      setAbilities((prev) => ({ ...prev, radarAvailable: false }));
+      // Mark revealed cells on enemy board
+      if (payload.revealedCells && payload.revealedCells.length > 0) {
+        const radarCells = {};
+        for (const cellNotation of payload.revealedCells) {
+          const { col, row } = parseCellNotation(cellNotation);
+          const cellKey = `${col}${row}`;
+          radarCells[cellKey] = "radar";
+        }
+        setEnemyBoard((prev) => ({ ...prev, ...radarCells }));
+        addToast("RADAR: NAVIO(S) DETECTADO(S)", <Radar size={16} />, "green");
+      } else {
+        addToast("RADAR: NENHUM NAVIO NA ÁREA", <Radar size={16} />, "green");
+      }
+      setRadarMode(false);
+      setRadarHoverCells([]);
+    } else {
+      addToast("OPONENTE USOU RADAR", <Radar size={16} />, "green");
+    }
+  }
+
+  function handleEmpActivated(payload) {
+    if (payload.targetId === user?.id) {
+      setAbilities((prev) => ({
+        ...prev,
+        empDisabledTurns: payload.disabledTurns,
+      }));
+      addToast("EMP: HABILIDADES DESATIVADAS", <Zap size={16} />, "yellow");
+    } else {
+      setAbilities((prev) => ({ ...prev, empNavalAvailable: false }));
+      addToast("EMP ATIVADO NO OPONENTE", <Zap size={16} />, "yellow");
+    }
+  }
+
+  // --- Cell interaction handlers ---
+
   function handleCellClick(col, row) {
     if (!isMyTurn || attackingCell) return;
 
     const cellKey = `${col}${row}`;
+
+    // Radar mode: send radar ability
+    if (radarMode) {
+      const cell = boardClickToCell(col, row);
+      ws.publish(`/app/game/${gameId}/ability`, { ability: "RADAR", cell });
+      setAttackingCell(cellKey);
+      setRadarMode(false);
+      setRadarHoverCells([]);
+      return;
+    }
+
     // Don't attack cells already attacked
-    if (enemyBoard[cellKey]) return;
+    if (enemyBoard[cellKey] && enemyBoard[cellKey] !== "radar") return;
 
     const cell = boardClickToCell(col, row);
     setAttackingCell(cellKey);
@@ -393,22 +571,61 @@ function GamePage() {
     ws.publish(`/app/game/${gameId}/attack`, payload);
   }
 
-  // Reconnect countdown
-  useEffect(() => {
-    if (!disconnected || reconnectTime <= 0) return;
+  function handleCellHover(col, row) {
+    if (!radarMode) return;
+    const cells = getRadarCells(col, row);
+    setRadarHoverCells(cells);
+  }
 
-    const interval = setInterval(() => {
-      setReconnectTime((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  function handleCellLeave() {
+    if (radarMode) {
+      setRadarHoverCells([]);
+    }
+  }
 
-    return () => clearInterval(interval);
-  }, [disconnected, reconnectTime]);
+  // --- Ability usage ---
+
+  function handleUseAbility(ability) {
+    if (!isMyTurn || abilities.empDisabledTurns > 0) return;
+
+    switch (ability) {
+      case "SHIELD":
+        ws.publish(`/app/game/${gameId}/ability`, { ability: "SHIELD" });
+        // Optimistic update
+        setAbilities((prev) => ({
+          ...prev,
+          shieldActive: true,
+          shieldCharges: prev.shieldCharges - 1,
+        }));
+        addToast("ESCUDO ATIVADO", <Shield size={16} />, "blue");
+        break;
+      case "EMP_NAVAL":
+        ws.publish(`/app/game/${gameId}/ability`, { ability: "EMP_NAVAL" });
+        setAbilities((prev) => ({ ...prev, empNavalAvailable: false }));
+        setAttackingCell("emp"); // Mark as action taken this turn
+        break;
+      default:
+        break;
+    }
+  }
+
+  function handleToggleTorpedo() {
+    if (torpedoAvailable) {
+      setTorpedoMode((m) => !m);
+      setRadarMode(false);
+      setRadarHoverCells([]);
+    }
+  }
+
+  function handleToggleRadar() {
+    if (abilities.radarAvailable) {
+      setRadarMode((m) => !m);
+      setTorpedoMode(false);
+      if (!radarMode) {
+        setRadarHoverCells([]);
+      }
+    }
+  }
 
   if (loading) {
     return (
@@ -428,6 +645,9 @@ function GamePage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      {/* Battle Toasts */}
+      <BattleToast toasts={toasts} onDismiss={dismissToast} />
+
       {/* Disconnect overlay */}
       {disconnected && (
         <ModalInfo
@@ -446,7 +666,7 @@ function GamePage() {
         {/* Title */}
         <div className="flex flex-col items-center gap-1 w-full">
           <span className="font-poppins font-semibold text-xs text-white/50 uppercase tracking-widest">
-            Batalha
+            {isTactical ? "Batalha Tática" : "Batalha"}
           </span>
         </div>
 
@@ -460,9 +680,14 @@ function GamePage() {
               <span className="font-poppins font-semibold text-xs text-white">
                 {user?.nickname}
               </span>
-              <span className="font-poppins text-[10px] text-white/40">
-                Você
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="font-poppins text-[10px] text-white/40">
+                  Você
+                </span>
+                {isTactical && abilities.shieldActive && (
+                  <Shield size={10} className="text-blue-400 animate-pulse" />
+                )}
+              </div>
             </div>
           </div>
 
@@ -475,9 +700,11 @@ function GamePage() {
               <span className="font-poppins font-semibold text-xs text-white">
                 {opponentNickname}
               </span>
-              <span className="font-poppins text-[10px] text-white/40">
-                Oponente
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="font-poppins text-[10px] text-white/40">
+                  Oponente
+                </span>
+              </div>
             </div>
             <div className="w-9 h-9 rounded-full bg-blue-dark-900 border-2 border-orange-300 flex items-center justify-center">
               <CircleUserRound size={18} className="text-orange-300" />
@@ -504,58 +731,42 @@ function GamePage() {
                 className={isMyTurn ? "text-orange-400" : "text-blue-300/50"}
               />
             </div>
-            <span
-              className={`font-poppins font-semibold text-sm ${
-                isMyTurn ? "text-orange-300" : "text-blue-300/70"
-              }`}
-            >
-              {isMyTurn ? "SUA VEZ DE ATACAR!" : "VEZ DO OPONENTE..."}
-            </span>
+            <div className="flex flex-col">
+              <span
+                className={`font-poppins font-semibold text-sm ${isMyTurn ? "text-orange-300" : "text-blue-300/70"}`}
+              >
+                {isMyTurn ? "SUA VEZ DE ATACAR!" : "VEZ DO OPONENTE..."}
+              </span>
+              {isTactical && abilities.empDisabledTurns > 0 && (
+                <span className="font-poppins text-[10px] text-yellow-400">
+                  ⚡ EMP: {abilities.empDisabledTurns} turno(s)
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-dark-900 border border-blue-300/30">
             <Clock size={14} className="text-blue-300" />
             <span
-              className={`font-anybody font-bold text-lg ${
-                timeLeft <= 10 ? "text-red-400" : "text-white"
-              }`}
+              className={`font-anybody font-bold text-lg ${timeLeft <= 10 ? "text-red-400" : "text-white"}`}
             >
               {timerFormatted}
             </span>
           </div>
         </Card>
 
-        {/* Torpedo button */}
-        {isMyTurn && (
-          <div className="flex items-center justify-center w-full max-w-4xl">
-            <button
-              onClick={() => torpedoAvailable && setTorpedoMode((m) => !m)}
-              disabled={!torpedoAvailable}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 font-poppins font-semibold text-sm transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
-                torpedoMode
-                  ? "bg-red-500/20 border-red-400 text-red-300 ring-2 ring-red-400/50 shadow-lg shadow-red-500/20"
-                  : "bg-blue-dark-900/60 border-blue-300/30 text-white/70 hover:border-orange-400/50 hover:text-white"
-              }`}
-            >
-              {/* <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <ellipse cx="10" cy="10" rx="3" ry="2" fill="currentColor" opacity="0.6" />
-                <rect x="2" y="9" width="8" height="2" rx="1" fill="currentColor" opacity="0.8" />
-                <polygon points="13,8 18,10 13,12" fill="currentColor" opacity="0.9" />
-                <line x1="1" y1="8" x2="3" y2="10" stroke="currentColor" strokeWidth="1.2" />
-                <line x1="1" y1="12" x2="3" y2="10" stroke="currentColor" strokeWidth="1.2" />
-              </svg> */}
-              <Rocket size={22} />
-              {torpedoMode
-                ? "TORPEDO ATIVO!"
-                : torpedoAvailable
-                  ? "USAR TORPEDO"
-                  : "TORPEDO USADO"}
-            </button>
-            {torpedoMode && (
-              <span className="ml-3 font-poppins text-xs text-red-300 animate-pulse">
-                Clique numa célula para disparar o torpedo
-              </span>
-            )}
-          </div>
+        {/* Ability Panel (Tactical mode only) */}
+        {isTactical && (
+          <AbilityPanel
+            abilities={abilities}
+            isMyTurn={isMyTurn}
+            onUseAbility={handleUseAbility}
+            torpedoAvailable={torpedoAvailable}
+            torpedoMode={torpedoMode}
+            onToggleTorpedo={handleToggleTorpedo}
+            radarMode={radarMode}
+            onToggleRadar={handleToggleRadar}
+            disabled={!!attackingCell}
+          />
         )}
 
         {/* Mobile toggle */}
@@ -595,16 +806,22 @@ function GamePage() {
             </span>
             <div className="relative">
               <GameBoard cells={myBoard} ships={myShips}>
-                {explosions.filter((e) => e.board === "my").map((exp) => (
-                  <ExplosionEffect
-                    key={exp.id}
-                    x={exp.x}
-                    y={exp.y}
-                    width={exp.width}
-                    height={exp.height}
-                    onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))}
-                  />
-                ))}
+                {explosions
+                  .filter((e) => e.board === "my")
+                  .map((exp) => (
+                    <ExplosionEffect
+                      key={exp.id}
+                      x={exp.x}
+                      y={exp.y}
+                      width={exp.width}
+                      height={exp.height}
+                      onComplete={() =>
+                        setExplosions((prev) =>
+                          prev.filter((e) => e.id !== exp.id),
+                        )
+                      }
+                    />
+                  ))}
               </GameBoard>
             </div>
           </Card>
@@ -623,17 +840,28 @@ function GamePage() {
                 cells={enemyBoard}
                 ships={enemySunkShips}
                 onCellClick={isMyTurn ? handleCellClick : undefined}
+                onCellHover={
+                  radarMode && isMyTurn ? handleCellHover : undefined
+                }
+                onCellLeave={radarMode ? handleCellLeave : undefined}
+                hoverCells={radarHoverCells}
               >
-                {explosions.filter((e) => e.board === "enemy").map((exp) => (
-                  <ExplosionEffect
-                    key={exp.id}
-                    x={exp.x}
-                    y={exp.y}
-                    width={exp.width}
-                    height={exp.height}
-                    onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))}
-                  />
-                ))}
+                {explosions
+                  .filter((e) => e.board === "enemy")
+                  .map((exp) => (
+                    <ExplosionEffect
+                      key={exp.id}
+                      x={exp.x}
+                      y={exp.y}
+                      width={exp.width}
+                      height={exp.height}
+                      onComplete={() =>
+                        setExplosions((prev) =>
+                          prev.filter((e) => e.id !== exp.id),
+                        )
+                      }
+                    />
+                  ))}
               </GameBoard>
             </div>
           </Card>
@@ -700,17 +928,6 @@ function ShipStatusCard({ ship, isEnemy = false }) {
       </div>
     </div>
   );
-}
-
-function getShipName(type) {
-  const names = {
-    CARRIER: "Porta-aviões",
-    BATTLESHIP: "Navio-tanque",
-    CRUISER: "Cruzador",
-    SUBMARINE: "Submarino",
-    DESTROYER: "Destroyer",
-  };
-  return names[type] || type;
 }
 
 export default GamePage;
