@@ -3,7 +3,17 @@ import LayoutPage from "../components/layout/LayoutPage";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import SectionTitle from "../components/ui/SectionTitle";
-import { Copy, Link, Users, CircleUserRound, Loader, X, Loader2, Swords, Zap } from "lucide-react";
+import {
+  Copy,
+  Link,
+  Users,
+  CircleUserRound,
+  Loader,
+  X,
+  Loader2,
+  Swords,
+  Zap,
+} from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
@@ -24,6 +34,32 @@ function WaitingRoomPage() {
   const opponentRef = useRef(null);
 
   const room = location.state?.room;
+
+  function handleRoomEvent(event) {
+    switch (event.event) {
+      case "PLAYER_JOINED":
+        setOpponent({ id: event.userId, nickname: event.nickname });
+        opponentRef.current = event.nickname;
+        break;
+      case "ROOM_READY":
+        // Both players are in, game created. Navigate to ship placement.
+        navigate("/game/ship-placement", {
+          state: {
+            gameId: event.gameId,
+            roomId: room.id,
+            opponentNickname: event.nickname || opponentRef.current,
+            gameMode: room.gameMode,
+          },
+          replace: true,
+        });
+        break;
+      case "PLAYER_LEFT":
+        setOpponent(null);
+        break;
+      default:
+        break;
+    }
+  }
 
   useEffect(() => {
     if (!room) {
@@ -61,27 +97,6 @@ function WaitingRoomPage() {
       ws.disconnect();
     };
   }, []);
-
-  function handleRoomEvent(event) {
-    switch (event.event) {
-      case "PLAYER_JOINED":
-        setOpponent({ id: event.userId, nickname: event.nickname });
-        opponentRef.current = event.nickname;
-        break;
-      case "ROOM_READY":
-        // Both players are in, game created. Navigate to ship placement.
-        navigate("/game/ship-placement", {
-          state: { gameId: event.gameId, roomId: room.id, opponentNickname: event.nickname || opponentRef.current, gameMode: room.gameMode },
-          replace: true,
-        });
-        break;
-      case "PLAYER_LEFT":
-        setOpponent(null);
-        break;
-      default:
-        break;
-    }
-  }
 
   async function handleCancel() {
     setCanceling(true);
@@ -133,15 +148,23 @@ function WaitingRoomPage() {
               </span>
             </div>
             <SectionTitle className="text-xl text-center">
-              {opponentNickname ? "Oponente encontrado!" : "Aguardando Oponente..."}
+              {opponentNickname
+                ? "Oponente encontrado!"
+                : "Aguardando Oponente..."}
             </SectionTitle>
             {room.gameMode && (
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-poppins font-semibold uppercase tracking-wider ${
-                room.gameMode === "TACTICAL"
-                  ? "bg-yellow-400/10 border border-yellow-400/40 text-yellow-300"
-                  : "bg-blue-300/10 border border-blue-300/40 text-blue-300"
-              }`}>
-                {room.gameMode === "TACTICAL" ? <Zap size={12} /> : <Swords size={12} />}
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-poppins font-semibold uppercase tracking-wider ${
+                  room.gameMode === "TACTICAL"
+                    ? "bg-yellow-400/10 border border-yellow-400/40 text-yellow-300"
+                    : "bg-blue-300/10 border border-blue-300/40 text-blue-300"
+                }`}
+              >
+                {room.gameMode === "TACTICAL" ? (
+                  <Zap size={12} />
+                ) : (
+                  <Swords size={12} />
+                )}
                 {room.gameMode === "TACTICAL" ? "Modo Tático" : "Modo Clássico"}
               </span>
             )}

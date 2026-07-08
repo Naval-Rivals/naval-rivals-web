@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { DragDropProvider } from "@dnd-kit/react";
-import { useDraggable } from "@dnd-kit/react";
-import { useDroppable } from "@dnd-kit/react";
 import Header from "../components/layout/Header";
 import LayoutPage from "../components/layout/LayoutPage";
 import Card from "../components/ui/Card";
@@ -16,15 +14,18 @@ import {
   Loader,
   Trash2,
   UserRoundX,
+  Shuffle,
+  Eraser,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
-import ShipSvg from "../components/game/ShipSvg";
 import GameBoard from "../components/game/GameBoard";
 import { ws } from "../services/websocket";
 import AlertCard from "../components/ui/AlertCard";
 import ModalInfo from "../components/ui/ModalInfo";
+import PlacementBoard from "../components/PlacementBoard";
+import FleetShipCard from "../components/FleetShipCard";
 
 const FLEET = [
   { type: "CARRIER", name: "Porta-aviões", size: 5 },
@@ -36,7 +37,6 @@ const FLEET = [
 
 const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 const ROWS = Array.from({ length: 10 }, (_, i) => i + 1);
-// const CELL_SIZE = 33;
 
 function boardToApi(col, row) {
   return { row: COLUMNS.indexOf(col), col: row - 1 };
@@ -105,6 +105,7 @@ function ShipPlacementPage() {
   const [selectedFleetShip, setSelectedFleetShip] = useState(null); // ship type from fleet
   const [selectedPlacedShip, setSelectedPlacedShip] = useState(null); // ship type on board
   const [placingOrientation, setPlacingOrientation] = useState("horizontal"); // orientation for placing from fleet
+  const [dragPreviewCells, setDragPreviewCells] = useState(null); // { cells: Set, valid: boolean } for drag preview
 
   useEffect(() => {
     if (!gameId) {
@@ -287,8 +288,56 @@ function ShipPlacementPage() {
     setSelectedPlacedShip(null);
   }
 
+  // Clear all ships from board
+  function clearFleet() {
+    setPlacedShips([]);
+    setSelectedFleetShip(null);
+    setSelectedPlacedShip(null);
+  }
+
+  // Place all ships randomly on the board
+  function randomPlacement() {
+    const newPlacedShips = [];
+    const shuffledFleet = [...FLEET].sort(() => Math.random() - 0.5);
+
+    for (const ship of shuffledFleet) {
+      let placed = false;
+      let attempts = 0;
+
+      while (!placed && attempts < 200) {
+        attempts++;
+        const orientation = Math.random() < 0.5 ? "horizontal" : "vertical";
+        const colIdx = Math.floor(Math.random() * 10);
+        const rowIdx = Math.floor(Math.random() * 10) + 1;
+        const col = COLUMNS[colIdx];
+
+        const positions = calculatePositions(
+          col,
+          rowIdx,
+          ship.size,
+          orientation,
+        );
+        if (!positions) continue;
+        if (hasOverlap(positions, newPlacedShips)) continue;
+
+        newPlacedShips.push({ type: ship.type, positions });
+        placed = true;
+      }
+    }
+
+    if (newPlacedShips.length === 5) {
+      setPlacedShips(newPlacedShips);
+      setSelectedFleetShip(null);
+      setSelectedPlacedShip(null);
+    } else {
+      // Retry if couldn't place all (extremely rare)
+      randomPlacement();
+    }
+  }
+
   // Drag placed ship to reposition
   function handleDragEnd(event) {
+    setDragPreviewCells(null);
     if (event.canceled) return;
     const { source, target } = event.operation;
     if (!target || !source) return;
@@ -336,9 +385,65 @@ function ShipPlacementPage() {
     setSelectedPlacedShip(null);
   }
 
+  function handleDragOver(event) {
+    const { source, target } = event.operation;
+    if (!target || !source) {
+      setDragPreviewCells(null);
+      return;
+    }
+
+    const shipType = source.id;
+    const ship = FLEET.find((s) => s.type === shipType);
+    if (!ship) {
+      setDragPreviewCells(null);
+      return;
+    }
+
+    const targetParts = target.id.split("-");
+    if (targetParts[0] !== "cell") {
+      setDragPreviewCells(null);
+      return;
+    }
+
+    const targetCol = targetParts[1];
+    const targetRow = parseInt(targetParts[2]);
+
+    const placed = placedShips.find((s) => s.type === shipType);
+    const orient = placed ? getShipOrientation(placed) : "horizontal";
+
+    const positions = calculatePositions(
+      targetCol,
+      targetRow,
+      ship.size,
+      orient,
+    );
+    if (!positions) {
+      // Out of bounds - show partial red preview
+      const colIdx = COLUMNS.indexOf(targetCol);
+      const partialPositions = [];
+      for (let i = 0; i < ship.size; i++) {
+        if (orient === "horizontal") {
+          const newRow = targetRow + i;
+          if (newRow <= 10) partialPositions.push(`${targetCol}${newRow}`);
+        } else {
+          const newColIdx = colIdx + i;
+          if (newColIdx < 10)
+            partialPositions.push(`${COLUMNS[newColIdx]}${targetRow}`);
+        }
+      }
+      setDragPreviewCells({ cells: new Set(partialPositions), valid: false });
+      return;
+    }
+
+    const cellKeys = new Set(positions.map((p) => `${p.col}${p.row}`));
+    const overlap = hasOverlap(positions, placedShips, shipType);
+    setDragPreviewCells({ cells: cellKeys, valid: !overlap });
+  }
+
   function handleDragStart() {
     setSelectedFleetShip(null);
     setSelectedPlacedShip(null);
+    setDragPreviewCells(null);
   }
 
   // Deselect everything
@@ -512,6 +617,7 @@ function ShipPlacementPage() {
           <DragDropProvider
             onDragEnd={handleDragEnd}
             onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
           >
             <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl">
               {/* Board */}
@@ -542,6 +648,13 @@ function ShipPlacementPage() {
                   onCellClick={handleCellClick}
                   onBackgroundClick={handleBackgroundClick}
                   selectedFleetShip={selectedFleetShip}
+                  placingOrientation={placingOrientation}
+                  dragPreviewCells={dragPreviewCells}
+                  FLEET={FLEET}
+                  COLUMNS={COLUMNS}
+                  ROWS={ROWS}
+                  calculatePositions={calculatePositions}
+                  hasOverlap={hasOverlap}
                 />
 
                 {/* Placing orientation (visible when fleet ship selected) */}
@@ -594,6 +707,27 @@ function ShipPlacementPage() {
                   </div>
                 )}
 
+                {/* Quick action buttons */}
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={randomPlacement}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-dark-900/60 border border-blue-300/30 text-blue-300 hover:border-orange-400/60 hover:text-orange-300 hover:bg-orange-500/10 transition-all font-poppins text-xs font-medium"
+                  >
+                    <Shuffle size={15} />
+                    Aleatório
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearFleet}
+                    disabled={placedShips.length === 0}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-dark-900/60 border border-blue-300/30 text-blue-300 hover:border-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all font-poppins text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-blue-300/30 disabled:hover:text-blue-300 disabled:hover:bg-blue-dark-900/60"
+                  >
+                    <Eraser size={15} />
+                    Limpar Frota
+                  </button>
+                </div>
+
                 {/* Submit */}
                 <Button
                   variant="primary"
@@ -623,6 +757,7 @@ function ShipPlacementPage() {
                       placed={placedTypes.has(ship.type)}
                       selected={selectedFleetShip === ship.type}
                       onClick={() => handleFleetShipClick(ship.type)}
+                      onRemove={removeShip}
                     />
                   ))}
                 </div>
@@ -631,216 +766,6 @@ function ShipPlacementPage() {
           </DragDropProvider>
         )}
       </LayoutPage>
-    </div>
-  );
-}
-
-function FleetShipCard({ ship, placed, selected, onClick }) {
-  return (
-    <div
-      onClick={placed ? undefined : onClick}
-      className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
-        placed
-          ? "bg-green-500/10 border-green-400/40 opacity-60"
-          : selected
-            ? "bg-orange-500/20 border-orange-400 ring-2 ring-orange-400/50"
-            : "bg-blue-dark-900/60 border-blue-300/20 cursor-pointer hover:border-orange-400/50"
-      }`}
-    >
-      <Ship
-        size={22}
-        className={
-          placed
-            ? "text-green-400"
-            : selected
-              ? "text-orange-400"
-              : "text-orange-300"
-        }
-      />
-      <span className="font-poppins font-medium text-xs text-white text-center">
-        {ship.name} ({ship.size})
-      </span>
-      <div className="flex gap-0.5">
-        {Array.from({ length: ship.size }).map((_, i) => (
-          <div
-            key={i}
-            className={`w-2.5 h-2.5 rounded-full border ${
-              placed
-                ? "bg-green-400/70 border-green-300/50"
-                : selected
-                  ? "bg-orange-400 border-orange-300"
-                  : "bg-orange-400/70 border-orange-300/50"
-            }`}
-          />
-        ))}
-      </div>
-      {placed && (
-        <span className="font-poppins text-[10px] text-green-400 uppercase">
-          No tabuleiro ✓
-        </span>
-      )}
-      {selected && !placed && (
-        <span className="font-poppins text-[10px] text-orange-400 uppercase">
-          Selecionado
-        </span>
-      )}
-    </div>
-  );
-}
-
-function PlacementBoard({
-  cellsMap,
-  placedShips,
-  selectedPlacedShip,
-  onPlacedShipClick,
-  onCellClick,
-  onBackgroundClick,
-  selectedFleetShip,
-}) {
-  return (
-    <div
-      className="flex flex-col items-center w-full"
-      onClick={(e) => {
-        e.stopPropagation();
-        onBackgroundClick();
-      }}
-    >
-      <div className="flex w-full max-w-[360px]">
-        <div className="w-6" />
-        <div className="flex-1 grid grid-cols-10">
-          {COLUMNS.map((col) => (
-            <span
-              key={col}
-              className="text-center font-poppins text-[10px] text-blue-300/70 font-semibold pb-1"
-            >
-              {col}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex w-full max-w-[360px]">
-        <div className="flex flex-col">
-          {ROWS.map((row) => (
-            <div
-              key={row}
-              className="h-[33px] flex items-center justify-center w-6"
-            >
-              <span className="font-poppins text-[10px] text-blue-300/70 font-semibold">
-                {row}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="relative flex-1">
-          <div className="grid grid-cols-10 rounded-md overflow-hidden">
-            {ROWS.map((row) =>
-              COLUMNS.map((col) => (
-                <DroppableCell
-                  key={`${col}${row}`}
-                  col={col}
-                  row={row}
-                  hasShip={!!cellsMap[`${col}${row}`]}
-                  isPlacing={!!selectedFleetShip}
-                  onCellClick={onCellClick}
-                />
-              )),
-            )}
-          </div>
-
-          {/* Ship SVG overlays */}
-          {placedShips.map((ship) => (
-            <PlacedShipOverlay
-              key={ship.type}
-              ship={ship}
-              isSelected={selectedPlacedShip === ship.type}
-              onShipClick={onPlacedShipClick}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DroppableCell({ col, row, hasShip, isPlacing, onCellClick }) {
-  const { ref, isDropTarget } = useDroppable({ id: `cell-${col}-${row}` });
-
-  function handleClick(e) {
-    e.stopPropagation();
-    if (isPlacing && !hasShip) {
-      onCellClick(col, row);
-    }
-  }
-
-  return (
-    <div
-      ref={ref}
-      onClick={handleClick}
-      className={`h-[33px] border border-blue-300/10 flex items-center justify-center transition-colors ${
-        isDropTarget
-          ? "bg-orange-400/30 border-orange-400/50"
-          : hasShip
-            ? "bg-green-500/10 border-green-400/20"
-            : isPlacing
-              ? "bg-blue-dark-900/40 hover:bg-orange-400/20 cursor-crosshair"
-              : "bg-blue-dark-900/40 hover:bg-blue-300/10"
-      }`}
-    />
-  );
-}
-
-function PlacedShipOverlay({ ship, isSelected, onShipClick }) {
-  const { ref, isDragging } = useDraggable({ id: ship.type });
-
-  if (!ship.positions || ship.positions.length === 0) return null;
-
-  const positions = ship.positions;
-  const size = positions.length;
-
-  let orientation = "horizontal";
-  if (size > 1 && positions[0].col === positions[1].col) {
-    // Same column letter, rows change = visually vertical (goes down)
-    orientation = "vertical";
-  }
-
-  const colIndices = positions.map((p) => COLUMNS.indexOf(p.col));
-  const rowIndices = positions.map((p) => p.row - 1);
-  const minCol = Math.min(...colIndices);
-  const minRow = Math.min(...rowIndices);
-
-  // Use percentage positioning (10% per cell in a 10x10 grid)
-  const leftPct = minCol * 10;
-  const topPct = minRow * 10;
-  const widthPct = (orientation === "horizontal" ? 1 : size) * 10;
-  const heightPct = (orientation === "horizontal" ? size : 1) * 10;
-
-  function handleClick(e) {
-    e.stopPropagation();
-    onShipClick(ship.type);
-  }
-
-  return (
-    <div
-      ref={ref}
-      className={`absolute cursor-grab active:cursor-grabbing transition-all ${
-        isDragging ? "opacity-50 scale-95" : ""
-      } ${isSelected ? "drop-shadow-[0_0_8px_rgba(251,146,60,0.7)]" : "hover:drop-shadow-[0_0_4px_rgba(74,222,128,0.5)]"}`}
-      style={{
-        left: `${leftPct}%`,
-        top: `${topPct}%`,
-        width: `${widthPct}%`,
-        height: `${heightPct}%`,
-      }}
-      onClick={handleClick}
-    >
-      <ShipSvg
-        size={size}
-        orientation={orientation}
-        color={isSelected ? "#fb923c" : "#4ade80"}
-        cellSize={33}
-      />
     </div>
   );
 }

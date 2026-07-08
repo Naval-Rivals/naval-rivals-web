@@ -171,6 +171,11 @@ function GamePage() {
             `/topic/game/${gameId}/events`,
             handleGameEvent,
           );
+          // Subscribe to private events (e.g., RADAR_RESULT)
+          ws.subscribe(
+            `/user/topic/game/${gameId}/events`,
+            handleGameEvent,
+          );
         },
       });
     }
@@ -339,6 +344,9 @@ function GamePage() {
       case "RADAR_USED":
         handleRadarUsed(payload);
         break;
+      case "RADAR_RESULT":
+        handleRadarResult(payload);
+        break;
       case "EMP_ACTIVATED":
         handleEmpActivated(payload);
         break;
@@ -504,24 +512,29 @@ function GamePage() {
 
   function handleRadarUsed(payload) {
     if (payload.playerId === user?.id) {
+      // Own radar usage acknowledged - mark ability as used, clear radar mode
       setAbilities((prev) => ({ ...prev, radarAvailable: false }));
-      // Mark revealed cells on enemy board
-      if (payload.revealedCells && payload.revealedCells.length > 0) {
-        const radarCells = {};
-        for (const cellNotation of payload.revealedCells) {
-          const { col, row } = parseCellNotation(cellNotation);
-          const cellKey = `${col}${row}`;
-          radarCells[cellKey] = "radar";
-        }
-        setEnemyBoard((prev) => ({ ...prev, ...radarCells }));
-        addToast("RADAR: NAVIO(S) DETECTADO(S)", <Radar size={16} />, "green");
-      } else {
-        addToast("RADAR: NENHUM NAVIO NA ÁREA", <Radar size={16} />, "green");
-      }
       setRadarMode(false);
       setRadarHoverCells([]);
     } else {
+      // Opponent used radar - notify
       addToast("OPONENTE USOU RADAR", <Radar size={16} />, "green");
+    }
+  }
+
+  function handleRadarResult(payload) {
+    // Private event: only the radar user receives this with revealed cells
+    if (payload.revealedCells && payload.revealedCells.length > 0) {
+      const radarCells = {};
+      for (const cellNotation of payload.revealedCells) {
+        const { col, row } = parseCellNotation(cellNotation);
+        const cellKey = `${col}${row}`;
+        radarCells[cellKey] = "radar";
+      }
+      setEnemyBoard((prev) => ({ ...prev, ...radarCells }));
+      addToast("RADAR: NAVIO(S) DETECTADO(S)", <Radar size={16} />, "green");
+    } else {
+      addToast("RADAR: NENHUM NAVIO NA ÁREA", <Radar size={16} />, "green");
     }
   }
 
