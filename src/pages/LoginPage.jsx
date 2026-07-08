@@ -13,11 +13,10 @@ import Label from "../components/ui/Label";
 import ErrorField from "../components/ui/ErrorField";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
+import { Helmet } from "react-helmet-async";
 
 const loginSchema = z.object({
-  login: z
-    .string()
-    .min(1, "E-mail ou apelido é obrigatório"),
+  login: z.string().min(1, "E-mail ou apelido é obrigatório"),
   password: z
     .string()
     .min(1, "Senha é obrigatória")
@@ -60,12 +59,11 @@ function LoginPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      <Helmet>
+        <title>Login - Naval Rivals</title>
+      </Helmet>
       {loading && <Spinner />}
-      <AlertCard
-        show={!!apiError}
-        onClose={() => setApiError("")}
-        type="error"
-      >
+      <AlertCard show={!!apiError} onClose={() => setApiError("")} type="error">
         {apiError}
       </AlertCard>
 

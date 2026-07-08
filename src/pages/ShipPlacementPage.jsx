@@ -26,6 +26,7 @@ import AlertCard from "../components/ui/AlertCard";
 import ModalInfo from "../components/ui/ModalInfo";
 import PlacementBoard from "../components/PlacementBoard";
 import FleetShipCard from "../components/FleetShipCard";
+import { Helmet } from "react-helmet-async";
 
 const FLEET = [
   { type: "CARRIER", name: "Porta-aviões", size: 5 },
@@ -503,6 +504,9 @@ function ShipPlacementPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      <Helmet>
+        <title>Posicionamento - Naval Rivals</title>
+      </Helmet>
       <AlertCard
         show={alert.show}
         onClose={() => setAlert({ ...alert, show: false })}

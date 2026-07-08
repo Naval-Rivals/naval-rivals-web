@@ -9,6 +9,7 @@ import Footer from "../components/layout/Footer";
 import { useAuth } from "../contexts/AuthContext";
 import ModalConfirmation from "../components/ui/ModalConfirmation";
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -22,6 +23,9 @@ function ProfilePage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      <Helmet>
+        <title>Perfil - Naval Rivals</title>
+      </Helmet>
       {showLogoutModal && (
         <ModalConfirmation
           title="Sair da Conta"

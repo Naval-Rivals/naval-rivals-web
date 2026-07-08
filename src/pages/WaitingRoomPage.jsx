@@ -20,6 +20,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { ws } from "../services/websocket";
 import ModalConfirmation from "../components/ui/ModalConfirmation";
+import { Helmet } from "react-helmet-async";
 
 function WaitingRoomPage() {
   const navigate = useNavigate();
@@ -124,6 +125,9 @@ function WaitingRoomPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      <Helmet>
+        <title>Sala - Naval Rivals</title>
+      </Helmet>
       {showCancelModal && (
         <ModalConfirmation
           title="Cancelar Batalha"

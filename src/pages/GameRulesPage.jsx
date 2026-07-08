@@ -5,11 +5,25 @@ import Card from "../components/ui/Card";
 import SectionTitle from "../components/ui/SectionTitle";
 import RuleItem from "../components/ui/RuleItem";
 import Footer from "../components/layout/Footer";
-import { BookOpen, Ship, Crosshair, Trophy, Zap, Rocket, Radar, Shield, Radio } from "lucide-react";
+import {
+  BookOpen,
+  Ship,
+  Crosshair,
+  Trophy,
+  Zap,
+  Rocket,
+  Radar,
+  Shield,
+  Radio,
+} from "lucide-react";
+import { Helmet } from "react-helmet-async";
 
 function GameRulesPage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      <Helmet>
+        <title>Regras - Naval Rivals</title>
+      </Helmet>
       <Header />
       <LayoutPage interClassName="p-4 pb-20 md:pb-8">
         <div className="flex flex-col items-center gap-2 pt-4 pb-2 w-full">
@@ -97,7 +111,8 @@ function GameRulesPage() {
             <SectionTitle>Modo Tático</SectionTitle>
           </div>
           <p className="font-poppins font-light text-xs text-white/60">
-            O modo tático adiciona 4 habilidades especiais à batalha clássica. Cada habilidade tem usos limitados — use com estratégia!
+            O modo tático adiciona 4 habilidades especiais à batalha clássica.
+            Cada habilidade tem usos limitados — use com estratégia!
           </p>
 
           <div className="flex flex-col gap-3">
@@ -137,7 +152,9 @@ function GameRulesPage() {
             </span>
             <div className="flex flex-col gap-1">
               <span className="font-poppins text-[10px] text-white/50 leading-relaxed">
-                1. Você pode ativar o <span className="text-blue-300">Escudo</span> (não gasta o turno)
+                1. Você pode ativar o{" "}
+                <span className="text-blue-300">Escudo</span> (não gasta o
+                turno)
               </span>
               <span className="font-poppins text-[10px] text-white/50 leading-relaxed">
                 2. Depois, escolha UMA ação: tiro normal, torpedo, radar ou EMP
@@ -199,13 +216,21 @@ function AbilityRow({ icon, name, uses, turnCost, description }) {
       <div className="mt-0.5 shrink-0">{icon}</div>
       <div className="flex flex-col gap-1 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-poppins font-semibold text-sm text-white">{name}</span>
-          <span className="font-poppins text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white/60">{uses}</span>
-          <span className={`font-poppins text-[9px] px-1.5 py-0.5 rounded ${
-            turnCost === "Não consome turno"
-              ? "bg-green-400/10 text-green-300/70"
-              : "bg-orange-400/10 text-orange-300/70"
-          }`}>{turnCost}</span>
+          <span className="font-poppins font-semibold text-sm text-white">
+            {name}
+          </span>
+          <span className="font-poppins text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white/60">
+            {uses}
+          </span>
+          <span
+            className={`font-poppins text-[9px] px-1.5 py-0.5 rounded ${
+              turnCost === "Não consome turno"
+                ? "bg-green-400/10 text-green-300/70"
+                : "bg-orange-400/10 text-orange-300/70"
+            }`}
+          >
+            {turnCost}
+          </span>
         </div>
         <span className="font-poppins font-light text-xs text-white/55 leading-relaxed">
           {description}

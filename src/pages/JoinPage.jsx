@@ -8,6 +8,7 @@ import { AlertCircle, Home } from "lucide-react";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Spinner from "../components/ui/Spinner";
+import { Helmet } from "react-helmet-async";
 
 function JoinPage() {
   const { code } = useParams();
@@ -25,9 +26,19 @@ function JoinPage() {
 
     async function joinRoom() {
       try {
-        const room = await api.post("/rooms/join", { code: code.toUpperCase() });
+        const room = await api.post("/rooms/join", {
+          code: code.toUpperCase(),
+        });
         if (room.gameId) {
-          navigate("/game/ship-placement", { state: { gameId: room.gameId, roomId: room.id, opponentNickname: room.host?.nickname, gameMode: room.gameMode }, replace: true });
+          navigate("/game/ship-placement", {
+            state: {
+              gameId: room.gameId,
+              roomId: room.id,
+              opponentNickname: room.host?.nickname,
+              gameMode: room.gameMode,
+            },
+            replace: true,
+          });
         } else {
           navigate("/game/waiting-room", { state: { room }, replace: true });
         }
@@ -48,6 +59,7 @@ function JoinPage() {
   if (error) {
     return (
       <div className="h-screen flex flex-col overflow-hidden">
+        <Helmet>Join - Naval Rivals</Helmet>
         <Header />
         <LayoutPage interClassName="p-4 justify-center">
           <Card className="flex flex-col items-center gap-4 p-6 max-w-md">

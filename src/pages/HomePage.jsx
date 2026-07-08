@@ -13,12 +13,17 @@ import logo from "../assets/logo-naval-rivals.png";
 import Footer from "../components/layout/Footer";
 import AlertCard from "../components/ui/AlertCard";
 import Spinner from "../components/ui/Spinner";
+import { Helmet } from "react-helmet-async";
 
 function HomePage() {
   const [roomCode, setRoomCode] = useState("");
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [joiningRoom, setJoiningRoom] = useState(false);
-  const [alert, setAlert] = useState({ show: false, message: "", type: "error" });
+  const [alert, setAlert] = useState({
+    show: false,
+    message: "",
+    type: "error",
+  });
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
@@ -33,7 +38,11 @@ function HomePage() {
       const room = await api.post("/rooms", { gameMode });
       navigate("/game/waiting-room", { state: { room } });
     } catch (err) {
-      setAlert({ show: true, message: err.message || "Erro ao criar sala", type: "error" });
+      setAlert({
+        show: true,
+        message: err.message || "Erro ao criar sala",
+        type: "error",
+      });
     } finally {
       setCreatingRoom(false);
     }
@@ -48,7 +57,11 @@ function HomePage() {
 
     const code = roomCode.trim().toUpperCase();
     if (!code) {
-      setAlert({ show: true, message: "Digite o código da sala", type: "error" });
+      setAlert({
+        show: true,
+        message: "Digite o código da sala",
+        type: "error",
+      });
       return;
     }
 
@@ -57,13 +70,22 @@ function HomePage() {
       const room = await api.post("/rooms/join", { code });
       if (room.gameId) {
         navigate("/game/ship-placement", {
-          state: { gameId: room.gameId, roomId: room.id, opponentNickname: room.host?.nickname, gameMode: room.gameMode },
+          state: {
+            gameId: room.gameId,
+            roomId: room.id,
+            opponentNickname: room.host?.nickname,
+            gameMode: room.gameMode,
+          },
         });
       } else {
         navigate("/game/waiting-room", { state: { room } });
       }
     } catch (err) {
-      setAlert({ show: true, message: err.message || "Erro ao entrar na sala", type: "error" });
+      setAlert({
+        show: true,
+        message: err.message || "Erro ao entrar na sala",
+        type: "error",
+      });
     } finally {
       setJoiningRoom(false);
     }
@@ -71,6 +93,9 @@ function HomePage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      <Helmet>
+        <title>Home - Naval Rivals</title>
+      </Helmet>
       {(creatingRoom || joiningRoom) && <Spinner />}
       <AlertCard
         show={alert.show}
@@ -136,18 +161,24 @@ function HomePage() {
             <div className="flex-1 flex items-start gap-2 p-3 rounded-lg bg-blue-300/5 border border-blue-300/15">
               <Swords size={14} className="text-blue-300 shrink-0 mt-0.5" />
               <div className="flex flex-col gap-0.5">
-                <span className="font-poppins font-semibold text-[11px] text-blue-300">Clássico</span>
+                <span className="font-poppins font-semibold text-[11px] text-blue-300">
+                  Clássico
+                </span>
                 <span className="font-poppins text-[10px] text-white/50 leading-relaxed">
-                  Batalha naval tradicional. Alterne tiros com o oponente e afunde toda a frota inimiga.
+                  Batalha naval tradicional. Alterne tiros com o oponente e
+                  afunde toda a frota inimiga.
                 </span>
               </div>
             </div>
             <div className="flex-1 flex items-start gap-2 p-3 rounded-lg bg-yellow-400/5 border border-yellow-400/15">
               <Zap size={14} className="text-yellow-300 shrink-0 mt-0.5" />
               <div className="flex flex-col gap-0.5">
-                <span className="font-poppins font-semibold text-[11px] text-yellow-300">Tático</span>
+                <span className="font-poppins font-semibold text-[11px] text-yellow-300">
+                  Tático
+                </span>
                 <span className="font-poppins text-[10px] text-white/50 leading-relaxed">
-                  Modo clássico + 4 habilidades especiais: Torpedo, Radar, Escudo e EMP Naval.
+                  Modo clássico + 4 habilidades especiais: Torpedo, Radar,
+                  Escudo e EMP Naval.
                 </span>
               </div>
             </div>

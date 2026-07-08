@@ -19,6 +19,7 @@ import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import Spinner from "../components/ui/Spinner";
+import { Helmet } from "react-helmet-async";
 
 function formatDuration(seconds) {
   if (!seconds) return "00:00";
@@ -79,6 +80,9 @@ function GameResultPage() {
   if (error || !result) {
     return (
       <div className="h-screen flex flex-col overflow-hidden">
+        <Helmet>
+          <title>Resultado - Naval Rivals</title>
+        </Helmet>
         <Header />
         <LayoutPage interClassName="p-4 justify-center">
           <Card className="flex flex-col items-center gap-4 p-6 max-w-md">
@@ -107,6 +111,9 @@ function GameResultPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      <Helmet>
+        <title>Resultado - Naval Rivals</title>
+      </Helmet>
       <Header />
       <LayoutPage interClassName="p-4 pb-8 justify-center">
         <Card className="flex flex-col items-center gap-6 w-full max-w-lg p-6">
@@ -245,9 +252,7 @@ function StatCard({ icon, label, value }) {
   return (
     <div className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-blue-dark-900/60 border border-white/10">
       {icon}
-      <span className="font-anybody font-bold text-lg text-white">
-        {value}
-      </span>
+      <span className="font-anybody font-bold text-lg text-white">{value}</span>
       <span className="font-poppins text-[10px] text-white/50 uppercase tracking-wide text-center">
         {label}
       </span>

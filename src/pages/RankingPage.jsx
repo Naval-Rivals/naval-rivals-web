@@ -9,6 +9,7 @@ import Footer from "../components/layout/Footer";
 import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import Spinner from "../components/ui/Spinner";
+import { Helmet } from "react-helmet-async";
 
 const PAGE_SIZE = 10;
 
@@ -70,6 +71,9 @@ function RankingPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      <Helmet>
+        <title>Ranking - Naval Rivals</title>
+      </Helmet>
       <Header />
       <LayoutPage interClassName="p-4 pb-20 md:pb-4">
         <Card className="flex gap-4 flex-col w-full p-6">

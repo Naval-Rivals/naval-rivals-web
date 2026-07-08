@@ -17,6 +17,7 @@ import Button from "../components/ui/Button";
 import Footer from "../components/layout/Footer";
 import AlertCard from "../components/ui/AlertCard";
 import ModalConfirmation from "../components/ui/ModalConfirmation";
+import { Helmet } from "react-helmet-async";
 
 const nicknameSchema = z.object({
   nickname: z
@@ -43,7 +44,11 @@ const passwordSchema = z
 function MyAccountPage() {
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
-  const [alert, setAlert] = useState({ show: false, message: "", type: "error" });
+  const [alert, setAlert] = useState({
+    show: false,
+    message: "",
+    type: "error",
+  });
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [pendingNicknameData, setPendingNicknameData] = useState(null);
@@ -81,12 +86,20 @@ function MyAccountPage() {
         nickname: data.nickname,
       });
       updateUser({ nickname: updated.nickname });
-      setAlert({ show: true, message: "Nickname alterado com sucesso!", type: "success" });
+      setAlert({
+        show: true,
+        message: "Nickname alterado com sucesso!",
+        type: "success",
+      });
     } catch (error) {
       if (error.status === 409) {
         setAlert({ show: true, message: error.message, type: "error" });
       } else {
-        setAlert({ show: true, message: error.message || "Erro ao alterar nickname", type: "error" });
+        setAlert({
+          show: true,
+          message: error.message || "Erro ao alterar nickname",
+          type: "error",
+        });
       }
     }
   }
@@ -107,7 +120,11 @@ function MyAccountPage() {
         passwordConfirmation: data.passwordConfirmation,
       });
       resetPassword();
-      setAlert({ show: true, message: "Senha alterada com sucesso!", type: "success" });
+      setAlert({
+        show: true,
+        message: "Senha alterada com sucesso!",
+        type: "success",
+      });
     } catch (error) {
       if (error.status === 401) {
         setAlert({ show: true, message: error.message, type: "error" });
@@ -115,13 +132,20 @@ function MyAccountPage() {
         const messages = error.data.details.map((d) => d.message).join(". ");
         setAlert({ show: true, message: messages, type: "error" });
       } else {
-        setAlert({ show: true, message: error.message || "Erro ao alterar senha", type: "error" });
+        setAlert({
+          show: true,
+          message: error.message || "Erro ao alterar senha",
+          type: "error",
+        });
       }
     }
   }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      <Helmet>
+        <title>Minha Conta - Naval Rivals</title>
+      </Helmet>
       {showNicknameModal && (
         <ModalConfirmation
           title="Alterar Nickname"

@@ -7,10 +7,14 @@ import InfoCard from "../components/ui/InfoCard";
 import Footer from "../components/layout/Footer";
 import { Target, Trophy, Shield, Crosshair, Anchor, Waves } from "lucide-react";
 import logo from "../assets/logo-naval-rivals.png";
+import { Helmet } from "react-helmet-async";
 
 function AboutUsPage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
+      <Helmet>
+        <title>Sobre nós - Naval Rivals</title>
+      </Helmet>
       <Header />
       <LayoutPage interClassName="p-4 pb-20 md:pb-8">
         <div className="flex flex-col items-center gap-4 pt-4 pb-2 w-full">

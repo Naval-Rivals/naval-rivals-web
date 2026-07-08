@@ -13,10 +13,14 @@ import Label from "../components/ui/Label";
 import ErrorField from "../components/ui/ErrorField";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
+import { Helmet } from "react-helmet-async";
 
 const registerSchema = z
   .object({
-    nickname: z.string().min(1, "Nickname é obrigatório").max(150, "Máximo 150 caracteres"),
+    nickname: z
+      .string()
+      .min(1, "Nickname é obrigatório")
+      .max(150, "Máximo 150 caracteres"),
     email: z
       .string()
       .min(1, "E-mail é obrigatório")
@@ -64,12 +68,11 @@ function RegisterPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      <Helmet>
+        <title>Cadastro - Naval Rivals</title>
+      </Helmet>
       {loading && <Spinner />}
-      <AlertCard
-        show={!!apiError}
-        onClose={() => setApiError("")}
-        type="error"
-      >
+      <AlertCard show={!!apiError} onClose={() => setApiError("")} type="error">
         {apiError}
       </AlertCard>
 

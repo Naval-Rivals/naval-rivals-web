@@ -24,6 +24,7 @@ import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { ws } from "../services/websocket";
+import { Helmet } from "react-helmet-async";
 
 const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
@@ -172,10 +173,7 @@ function GamePage() {
             handleGameEvent,
           );
           // Subscribe to private events (e.g., RADAR_RESULT)
-          ws.subscribe(
-            `/user/topic/game/${gameId}/events`,
-            handleGameEvent,
-          );
+          ws.subscribe(`/user/topic/game/${gameId}/events`, handleGameEvent);
         },
       });
     }
@@ -506,7 +504,11 @@ function GamePage() {
       addToast("SEU ESCUDO BLOQUEOU O ATAQUE!", <Shield size={16} />, "blue");
     } else {
       // Meu tiro foi bloqueado pelo escudo do oponente
-      addToast("ESCUDO INIMIGO BLOQUEOU SEU TIRO!", <Shield size={16} />, "blue");
+      addToast(
+        "ESCUDO INIMIGO BLOQUEOU SEU TIRO!",
+        <Shield size={16} />,
+        "blue",
+      );
     }
   }
 
@@ -658,6 +660,9 @@ function GamePage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
+      <Helmet>
+        <title>Batalha - Naval Rivals</title>
+      </Helmet>
       {/* Battle Toasts */}
       <BattleToast toasts={toasts} onDismiss={dismissToast} />
 
