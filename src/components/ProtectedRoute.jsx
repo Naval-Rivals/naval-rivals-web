@@ -7,7 +7,7 @@ function ProtectedRoute({ children }) {
   const location = useLocation();
 
   if (loading) {
-    return <Spinner />;
+    return <Spinner message="Carregando..." />;
   }
 
   if (!isAuthenticated) {

@@ -96,7 +96,7 @@ function HomePage() {
       <Helmet>
         <title>Home - Naval Rivals</title>
       </Helmet>
-      {(creatingRoom || joiningRoom) && <Spinner />}
+      {(creatingRoom || joiningRoom) && <Spinner message="Iniciando..." />}
       <AlertCard
         show={alert.show}
         onClose={() => setAlert({ ...alert, show: false })}

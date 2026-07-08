@@ -25,6 +25,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { ws } from "../services/websocket";
 import { Helmet } from "react-helmet-async";
+import Spinner from "../components/ui/Spinner";
 
 const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
@@ -643,17 +644,7 @@ function GamePage() {
   }
 
   if (loading) {
-    return (
-      <div className="h-screen flex flex-col overflow-hidden">
-        <Header minimal />
-        <LayoutPage interClassName="p-4 justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 text-orange-400 animate-spin" />
-            <p className="font-poppins text-white/70">Carregando batalha...</p>
-          </div>
-        </LayoutPage>
-      </div>
-    );
+    return <Spinner message="Carregando batalha..." />;
   }
 
   const timerFormatted = `${String(Math.floor(timeLeft / 60)).padStart(2, "0")}:${String(timeLeft % 60).padStart(2, "0")}`;

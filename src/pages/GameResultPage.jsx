@@ -74,7 +74,7 @@ function GameResultPage() {
   }
 
   if (loading) {
-    return <Spinner />;
+    return <Spinner message="Finalizando..." />;
   }
 
   if (error || !result) {

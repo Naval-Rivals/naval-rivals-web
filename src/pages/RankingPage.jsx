@@ -111,7 +111,7 @@ function RankingPage() {
           </div>
 
           {/* Content */}
-          {loading && ranking.length === 0 && <Spinner />}
+          {loading && ranking.length === 0 && <Spinner message="Ranqueando capitães..." />}
 
           {loading && ranking.length > 0 && (
             <div className="flex items-center justify-center py-12">
