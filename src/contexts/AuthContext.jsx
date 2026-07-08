@@ -14,10 +14,10 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  async function login({ email, password }) {
+  async function login({ login: loginValue, password }) {
     setLoading(true);
     try {
-      const data = await auth.login({ email, password });
+      const data = await auth.login({ login: loginValue, password });
       setUser({ id: data.id, nickname: data.nickname, email: data.email });
       return data;
     } finally {

@@ -4,8 +4,8 @@ const TOKEN_KEY = "token";
 const USER_KEY = "user";
 
 export const auth = {
-  async login({ email, password }) {
-    const data = await api.post("/auth/login", { email, password });
+  async login({ login, password }) {
+    const data = await api.post("/auth/login", { login, password });
     saveSession(data);
     return data;
   },

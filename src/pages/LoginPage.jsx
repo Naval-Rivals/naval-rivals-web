@@ -15,10 +15,9 @@ import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 
 const loginSchema = z.object({
-  email: z
+  login: z
     .string()
-    .min(1, "E-mail é obrigatório")
-    .email("Formato de e-mail inválido"),
+    .min(1, "E-mail ou apelido é obrigatório"),
   password: z
     .string()
     .min(1, "Senha é obrigatória")
@@ -52,7 +51,7 @@ function LoginPage() {
       }
     } catch (error) {
       if (error.status === 401) {
-        setApiError("E-mail ou senha incorretos");
+        setApiError("E-mail, apelido ou senha incorretos");
       } else {
         setApiError(error.message || "Erro ao fazer login");
       }
@@ -92,13 +91,13 @@ function LoginPage() {
             onSubmit={handleSubmit(onSubmit)}
           >
             <div>
-              <Label>E-MAIL</Label>
+              <Label>E-MAIL OU APELIDO</Label>
               <Input
-                placeholder="Digite seu e-mail"
-                error={!!errors.email}
-                {...register("email")}
+                placeholder="Digite seu e-mail ou apelido"
+                error={!!errors.login}
+                {...register("login")}
               />
-              <ErrorField error={errors.email} />
+              <ErrorField error={errors.login} />
             </div>
             <div>
               <Label>SENHA</Label>
