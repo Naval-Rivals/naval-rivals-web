@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { auth } from "../services/auth";
+import { ws } from "../services/websocket";
 
 const AuthContext = createContext(null);
 
@@ -51,6 +52,7 @@ export function AuthProvider({ children }) {
 
   function logout() {
     auth.logout();
+    ws.disconnect();
     setUser(null);
   }
 

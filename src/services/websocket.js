@@ -6,6 +6,10 @@ const WS_URL = API_BASE.replace(/^http/, "ws") + "/ws";
 let client = null;
 let connected = false;
 
+let currentOnConnect = null;
+let currentOnDisconnect = null;
+let currentOnError = null;
+
 /**
  * Connect to the WebSocket server using STOMP protocol.
  * @param {Object} options
@@ -15,21 +19,20 @@ let connected = false;
  * @returns {Client} STOMP client instance
  */
 export function connect({ onConnect, onDisconnect, onError } = {}) {
+  // Update the active callbacks
+  if (onConnect) currentOnConnect = onConnect;
+  if (onDisconnect) currentOnDisconnect = onDisconnect;
+  if (onError) currentOnError = onError;
+
   // Already connected — call onConnect immediately
   if (client && connected) {
     onConnect?.();
     return client;
   }
 
-  // Connection in progress — wait for it to complete, then call onConnect
+  // Connection in progress — wait for it to complete
   if (client && !connected) {
-    const existingClient = client;
-    const originalOnConnect = existingClient.onConnect;
-    existingClient.onConnect = () => {
-      originalOnConnect?.();
-      onConnect?.();
-    };
-    return existingClient;
+    return client;
   }
 
   const token = localStorage.getItem("token");
@@ -42,20 +45,30 @@ export function connect({ onConnect, onDisconnect, onError } = {}) {
     reconnectDelay: 5000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
+    debug: (msg) => {
+      console.log("[STOMP]", msg);
+    },
     onConnect: () => {
       connected = true;
-      onConnect?.();
+      currentOnConnect?.();
     },
     onDisconnect: () => {
       connected = false;
-      onDisconnect?.();
+      currentOnDisconnect?.();
     },
-    onStompError: (frame) => {
-      connected = false;
-      onError?.(frame);
+    onWebSocketError: (event) => {
+      console.error("[WS ERROR]", event);
+      currentOnError?.(event);
     },
-    onWebSocketClose: () => {
+    onWebSocketClose: (event) => {
       connected = false;
+
+      console.log("[WS CLOSE]", {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+      });
+      currentOnDisconnect?.();
     },
   });
 
@@ -71,6 +84,9 @@ export function disconnect() {
     client.deactivate();
     client = null;
     connected = false;
+    currentOnConnect = null;
+    currentOnDisconnect = null;
+    currentOnError = null;
   }
 }
 

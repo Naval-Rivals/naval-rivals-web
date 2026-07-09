@@ -123,7 +123,6 @@ function WaitingRoomPage() {
       if (isHost && !leftRoomRef.current) {
         cleanupTimerRef.current = setTimeout(() => {
           api.delete(`/rooms/${room.id}`).catch(() => {});
-          ws.disconnect();
         }, 100);
       }
     };
@@ -137,7 +136,6 @@ function WaitingRoomPage() {
     } catch {
       // Room might already be deleted, proceed anyway
     }
-    ws.disconnect();
     navigate("/", { replace: true });
   }
 

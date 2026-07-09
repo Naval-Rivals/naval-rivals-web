@@ -82,7 +82,7 @@ function ShipPlacementPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const subscriptionRef = useRef(null);
+  const subscriptionsRef = useRef([]);
 
   const gameId = location.state?.gameId;
   const roomId = location.state?.roomId;
@@ -125,26 +125,30 @@ function ShipPlacementPage() {
     ws.connect({
       onConnect: () => {
         ws.publish(`/app/game/${gameId}/register`);
-        subscriptionRef.current = ws.subscribe(
+
+        // Clear existing subscriptions to avoid duplicates on reconnect
+        subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
+
+        const subPlacement = ws.subscribe(
           `/topic/game/${gameId}/placement`,
           handlePlacementEvent,
         );
-        // Subscribe to game events for disconnect/game over
-        ws.subscribe(`/topic/game/${gameId}/events`, handleGameEvent);
-        // Also subscribe to room events to detect opponent leaving
-        if (roomId) {
-          ws.subscribe(`/topic/room/${roomId}`, handleRoomEvent);
-        }
+        const subEvents = ws.subscribe(
+          `/topic/game/${gameId}/events`,
+          handleGameEvent,
+        );
+        const subRoom = roomId
+          ? ws.subscribe(`/topic/room/${roomId}`, handleRoomEvent)
+          : null;
+
+        subscriptionsRef.current = [subPlacement, subEvents, subRoom].filter(Boolean);
       },
     });
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-        subscriptionRef.current = null;
-      }
-      ws.disconnect();
+      subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
+      subscriptionsRef.current = [];
     };
   }, [gameId]);
 

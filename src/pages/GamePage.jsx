@@ -74,7 +74,7 @@ function GamePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const subscriptionRef = useRef(null);
+  const subscriptionsRef = useRef([]);
   const timerRef = useRef(null);
   const blockedCellRef = useRef(null); // tracks cell blocked by shield (stores cellKey)
   const shieldBlockedThisTurnRef = useRef(false); // flag to track if shield blocked in current turn
@@ -175,12 +175,20 @@ function GamePage() {
       ws.connect({
         onConnect: () => {
           ws.publish(`/app/game/${gameId}/register`);
-          subscriptionRef.current = ws.subscribe(
+
+          // Clear existing subscriptions to avoid duplicates on reconnect
+          subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
+
+          const subEvents = ws.subscribe(
             `/topic/game/${gameId}/events`,
             handleGameEvent,
           );
-          // Subscribe to private events (e.g., RADAR_RESULT)
-          ws.subscribe(`/user/topic/game/${gameId}/events`, handleGameEvent);
+          const subUserEvents = ws.subscribe(
+            `/user/topic/game/${gameId}/events`,
+            handleGameEvent,
+          );
+
+          subscriptionsRef.current = [subEvents, subUserEvents];
         },
       });
     }
@@ -189,14 +197,11 @@ function GamePage() {
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-        subscriptionRef.current = null;
-      }
+      subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
+      subscriptionsRef.current = [];
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      ws.disconnect();
     };
   }, [gameId]);
 
@@ -482,11 +487,8 @@ function GamePage() {
     sessionStorage.removeItem("gameId");
     sessionStorage.removeItem("opponentNickname");
     sessionStorage.removeItem("gameMode");
-    if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe();
-      subscriptionRef.current = null;
-    }
-    ws.disconnect();
+    subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
+    subscriptionsRef.current = [];
     navigate("/game/result", {
       state: { gameId, winnerId: payload.winnerId },
       replace: true,
