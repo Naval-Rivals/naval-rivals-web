@@ -5,7 +5,19 @@ import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import LobbyPanel from "../components/game/LobbyPanel";
-import { Swords, LogIn, Anchor, Loader2, Zap, Users } from "lucide-react";
+import {
+  Swords,
+  LogIn,
+  Loader2,
+  Zap,
+  ArrowRight,
+  Hash,
+  Brain,
+  Target,
+  Gamepad2,
+  Shield,
+  Compass,
+} from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
@@ -16,6 +28,7 @@ import Footer from "../components/layout/Footer";
 import AlertCard from "../components/ui/AlertCard";
 import Spinner from "../components/ui/Spinner";
 import { Helmet } from "react-helmet-async";
+import ModeTag from "../components/ui/ModeTag";
 
 function HomePage() {
   const [roomCode, setRoomCode] = useState("");
@@ -61,7 +74,6 @@ function HomePage() {
             fetchRooms();
           }
         });
-        // Re-fetch after WS is connected to get latest state
         fetchRooms();
       },
     });
@@ -179,152 +191,222 @@ function HomePage() {
 
       <Header />
       <LayoutPage interClassName="p-4 pb-20 md:pb-8">
-        <div className="flex flex-col items-center gap-3 pt-4 pb-2 w-full">
-          <div className="w-28 shadow-lg rounded-2xl shadow-orange-500/40">
+        {/* Hero Section */}
+        <section className="relative flex flex-col items-center gap-3 pt-6 pb-6 w-full overflow-hidden">
+          {/* Background glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-72 bg-orange-500/15 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative w-24 md:w-28 drop-shadow-[0_0_20px_rgba(255,120,0,0.4)]">
             <img src={logo} alt="Logo Naval Rivals" className="rounded-2xl" />
           </div>
+
           <h2 className="font-anybody font-extrabold text-3xl md:text-4xl text-white text-center leading-tight">
-            Prepare-se para o <span className="text-orange-300">Combate</span>
+            PREPARE-SE PARA O
           </h2>
-          <p className="font-poppins font-light text-white/60 text-center text-sm max-w-md">
-            Desafie outros capitães em batalhas navais épicas. Posicione sua
-            frota, mire com precisão e domine os mares.
-          </p>
-        </div>
+          <h2 className="font-anybody font-extrabold text-4xl md:text-5xl text-orange-300 text-center leading-none -mt-2">
+            COMBATE
+          </h2>
 
-        <Card className="flex flex-col items-center gap-5 w-full p-6">
-          <div className="flex items-center gap-2">
-            <span className="font-poppins font-semibold text-white text-sm uppercase tracking-wider">
-              Iniciar Batalha
-            </span>
-          </div>
+          {/* Decorative divider */}
+          {/* <div className="flex items-center gap-2 mt-1">
+            <div className="w-8 h-px bg-gradient-to-r from-transparent to-orange-400/60" />
+            <Sparkles size={14} className="text-orange-400/60" />
+            <div className="w-8 h-px bg-gradient-to-l from-transparent to-orange-400/60" />
+          </div> */}
 
-          <div className="flex flex-col sm:flex-row w-full gap-3">
-            <Button
-              variant="primary"
-              className="flex items-center justify-center gap-2"
-              onClick={() => handleCreateRoom("CLASSIC")}
-              disabled={creatingRoom}
-            >
-              {creatingRoom ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Swords size={18} />
-              )}
-              {creatingRoom ? "CRIANDO..." : "BATALHA CLÁSSICA"}
-            </Button>
-            <Button
-              variant="secondary"
-              className="flex items-center justify-center gap-2 border-yellow-400/50! text-yellow-300!"
-              onClick={() => handleCreateRoom("TACTICAL")}
-              disabled={creatingRoom}
-            >
-              {creatingRoom ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Zap size={18} />
-              )}
-              {creatingRoom ? "CRIANDO..." : "BATALHA TÁTICA"}
-            </Button>
-          </div>
+          {/* <p className="font-poppins text-white/50 text-center text-sm max-w-xs">
+            Escolha seu modo de batalha e mostre suas habilidades no mar!
+          </p> */}
+        </section>
 
-          {/* Explicação dos modos */}
-          <div className="flex flex-col sm:flex-row w-full gap-2">
-            <div className="flex-1 flex items-start gap-2 p-3 rounded-lg bg-blue-300/5 border border-blue-300/15">
-              <Swords size={14} className="text-blue-300 shrink-0 mt-0.5" />
-              <div className="flex flex-col gap-0.5">
-                <span className="font-poppins font-semibold text-[11px] text-blue-300">
-                  Clássico
-                </span>
-                <span className="font-poppins text-[10px] text-white/50 leading-relaxed">
-                  Batalha naval tradicional. Alterne tiros com o oponente e
-                  afunde toda a frota inimiga.
-                </span>
+        {/* Battle Mode Selection */}
+        <section className="w-full">
+          <Card className="flex flex-col items-center gap-6 w-full p-5 md:p-6">
+            {/* Section title with decorative lines */}
+            <div className="flex items-center gap-3 w-full">
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent to-orange-400/40" />
+              <span className="font-poppins font-bold text-xs text-white/70 uppercase tracking-[0.2em]">
+                Escolha seu modo de batalha
+              </span>
+              <div className="flex-1 h-px bg-gradient-to-l from-transparent to-orange-400/40" />
+            </div>
+
+            {/* Mode cards */}
+            <div className="flex flex-col md:flex-row w-full gap-4">
+              {/* Classic Mode Card */}
+              <div className="relative flex-1 flex flex-col rounded-xl border-2 border-orange-400/30 bg-blue-dark-900/80 overflow-hidden">
+                {/* Recommended badge */}
+                <div className="absolute top-0 right-0 z-10">
+                  <span className="px-2.5 py-1  bg-orange-500 font-poppins font-bold text-[10px] text-white uppercase tracking-wide ">
+                    Recomendado
+                  </span>
+                </div>
+
+                <div className="flex items-start gap-4 p-5">
+                  {/* Icon */}
+                  <div className="w-14 h-14 rounded-full bg-orange-500/10 border-2 border-orange-400/40 flex items-center justify-center shrink-0">
+                    <Swords size={24} className="text-orange-300" />
+                  </div>
+                  {/* Info */}
+                  <div className="flex flex-col gap-1 flex-1">
+                    <span className="font-anybody font-extrabold text-base text-white leading-tight">
+                      BATALHA
+                    </span>
+                    <span className="font-anybody font-extrabold text-base text-orange-300 leading-tight -mt-0.5">
+                      CLÁSSICA
+                    </span>
+                    <p className="font-poppins text-[11px] text-white/50 leading-relaxed mt-1">
+                      A batalha naval tradicional. Afunde toda a frota inimiga
+                      para vencer.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div className="flex flex-wrap gap-1.5 px-5 pb-4">
+                  <ModeTag icon={<Brain size={10} />} label="Pura Estratégia" />
+                  <ModeTag icon={<Target size={10} />} label="Posicionamento" />
+                  <ModeTag
+                    icon={<Gamepad2 size={10} />}
+                    label="Diversão Clássica"
+                  />
+                </div>
+
+                {/* CTA Button */}
+                <div className="px-5 pb-5 mt-auto">
+                  <button
+                    onClick={() => handleCreateRoom("CLASSIC")}
+                    disabled={creatingRoom}
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-lg bg-orange-500 hover:bg-orange-400 font-poppins font-bold text-sm text-white uppercase tracking-wide transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/20"
+                  >
+                    {creatingRoom ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <>
+                        JOGAR CLÁSSICO
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Tactical Mode Card */}
+              <div className="relative flex-1 flex flex-col rounded-xl border-2 border-blue-300/30 bg-blue-dark-900/80 overflow-hidden">
+                <div className="flex items-start gap-4 p-5">
+                  {/* Icon */}
+                  <div className="w-14 h-14 rounded-full bg-blue-300/10 border-2 border-blue-300/40 flex items-center justify-center shrink-0">
+                    <Zap size={24} className="text-blue-300" />
+                  </div>
+                  {/* Info */}
+                  <div className="flex flex-col gap-1 flex-1">
+                    <span className="font-anybody font-extrabold text-base text-white leading-tight">
+                      BATALHA
+                    </span>
+                    <span className="font-anybody font-extrabold text-base text-blue-300 leading-tight -mt-0.5">
+                      TÁTICA
+                    </span>
+                    <p className="font-poppins text-[11px] text-white/50 leading-relaxed mt-1">
+                      Modo clássico com habilidades especiais que adicionam
+                      estratégia extra ao combate.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div className="flex flex-wrap gap-1.5 px-5 pb-4">
+                  <ModeTag icon={<Zap size={10} />} label="4 Habilidades" />
+                  <ModeTag
+                    icon={<Shield size={10} />}
+                    label="Poderes Especiais"
+                  />
+                  <ModeTag
+                    icon={<Compass size={10} />}
+                    label="Mais Estratégia"
+                  />
+                </div>
+
+                {/* CTA Button */}
+                <div className="px-5 pb-5 mt-auto">
+                  <button
+                    onClick={() => handleCreateRoom("TACTICAL")}
+                    disabled={creatingRoom}
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-lg bg-blue-300/20 hover:bg-blue-300/30 border border-blue-300/50 font-poppins font-bold text-sm text-blue-200 uppercase tracking-wide transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {creatingRoom ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <>
+                        JOGAR TÁTICO
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="flex-1 flex items-start gap-2 p-3 rounded-lg bg-yellow-400/5 border border-yellow-400/15">
-              <Zap size={14} className="text-yellow-300 shrink-0 mt-0.5" />
-              <div className="flex flex-col gap-0.5">
-                <span className="font-poppins font-semibold text-[11px] text-yellow-300">
-                  Tático
-                </span>
-                <span className="font-poppins text-[10px] text-white/50 leading-relaxed">
-                  Modo clássico + 4 habilidades especiais: Torpedo, Radar,
-                  Escudo e EMP Naval.
-                </span>
-              </div>
+
+            {/* Divider */}
+            <div className="flex items-center w-full gap-4">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="font-poppins font-semibold text-[11px] text-white/40 uppercase tracking-widest">
+                Ou entre com um código de sala
+              </span>
+              <div className="flex-1 h-px bg-white/10" />
             </div>
-          </div>
 
-          <div className="flex items-center w-full gap-3">
-            <div className="flex-1 h-px bg-white/20" />
-            <span className="font-poppins text-xs text-white/40 uppercase tracking-wider">
-              ou entre com código
-            </span>
-            <div className="flex-1 h-px bg-white/20" />
-          </div>
-
-          <form
-            onSubmit={handleJoinRoom}
-            className="flex flex-col sm:flex-row w-full gap-2"
-          >
-            <Input
-              placeholder="Digite o código da sala"
-              value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value)}
-            />
-            <Button
-              type="submit"
-              variant="ghost"
-              className="flex items-center justify-center gap-2 sm:w-auto sm:min-w-40 border-blue-300! text-blue-300!"
-              disabled={joiningRoom}
+            {/* Join by code */}
+            <form
+              onSubmit={handleJoinRoom}
+              className="flex flex-col sm:flex-row w-full gap-3"
             >
-              {joiningRoom ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <LogIn size={18} />
-              )}
-              {joiningRoom ? "ENTRANDO..." : "ENTRAR"}
-            </Button>
-          </form>
-        </Card>
+              <div className="relative flex-1">
+                <Hash
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+                />
+                <input
+                  type="text"
+                  placeholder="Digite o código da sala"
+                  value={roomCode}
+                  onChange={(e) => setRoomCode(e.target.value)}
+                  className="w-full bg-blue-dark-900 text-white border-2 border-white/15 rounded-lg py-2.5 pl-9 pr-4 placeholder:text-white/30 placeholder:text-sm focus:border-orange-400/50 focus:shadow-[0_0_8px_rgba(255,120,0,0.3)] outline-none transition-all"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={joiningRoom}
+                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg border-2 border-white/20 hover:border-orange-400/50 hover:bg-orange-500/10 text-white/70 hover:text-orange-300 font-poppins font-semibold text-sm uppercase tracking-wide transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {joiningRoom ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <LogIn size={16} />
+                )}
+                {joiningRoom ? "ENTRANDO..." : "ENTRAR NA SALA"}
+              </button>
+            </form>
+          </Card>
+        </section>
 
-        {/* Lobby - Salas disponíveis */}
+        {/* Lobby - Available rooms */}
         {isAuthenticated && (
-          <LobbyPanel
-            rooms={lobbyRooms}
-            onJoinRoom={handleJoinFromLobby}
-            joiningCode={joiningCode}
-            loading={lobbyLoading}
-          />
+          <section className="w-full">
+            <LobbyPanel
+              rooms={lobbyRooms}
+              onJoinRoom={handleJoinFromLobby}
+              joiningCode={joiningCode}
+              loading={lobbyLoading}
+            />
+          </section>
         )}
 
-        <div className="grid grid-cols-3 gap-3 w-full">
-          <div className="flex flex-col items-center gap-1 p-4 rounded-xl bg-blue-dark-900/60 border border-white/10">
-            <Anchor size={22} className="text-blue-300" />
-            <span className="font-anybody font-bold text-lg text-white">5</span>
-            <span className="font-poppins text-[10px] text-white/50 uppercase tracking-wide text-center">
-              Navios por frota
-            </span>
-          </div>
-          <div className="flex flex-col items-center gap-1 p-4 rounded-xl bg-blue-dark-900/60 border border-white/10">
-            <Swords size={22} className="text-orange-300" />
-            <span className="font-anybody font-bold text-lg text-white">
-              10×10
-            </span>
-            <span className="font-poppins text-[10px] text-white/50 uppercase tracking-wide text-center">
-              Tabuleiro
-            </span>
-          </div>
-          <div className="flex flex-col items-center gap-1 p-4 rounded-xl bg-blue-dark-900/60 border border-white/10">
-            <Users size={22} className="text-green-300" />
-            <span className="font-anybody font-bold text-lg text-white">
-              1v1
-            </span>
-            <span className="font-poppins text-[10px] text-white/50 uppercase tracking-wide text-center">
-              Tempo real
-            </span>
-          </div>
+        {/* Motivational footer line */}
+        <div className="flex items-center justify-center gap-2 py-2">
+          <Compass size={14} className="text-white/20" />
+          <span className="font-poppins text-xs text-white/30 italic">
+            Prepare sua estratégia. A vitória é para quem domina os mares.
+          </span>
         </div>
 
         <Footer />
