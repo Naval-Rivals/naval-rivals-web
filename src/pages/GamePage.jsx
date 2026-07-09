@@ -76,7 +76,9 @@ function GamePage() {
   const { user } = useAuth();
   const subscriptionRef = useRef(null);
   const timerRef = useRef(null);
-  const blockedCellRef = useRef(null); // tracks cell blocked by shield
+  const blockedCellRef = useRef(null); // tracks cell blocked by shield (stores cellKey)
+  const shieldBlockedThisTurnRef = useRef(false); // flag to track if shield blocked in current turn
+  const empJustAppliedRef = useRef(false); // prevents decrement on the same turn EMP is applied
 
   const gameId = location.state?.gameId || sessionStorage.getItem("gameId");
   const initialFirstTurn = location.state?.firstTurn;
@@ -90,6 +92,7 @@ function GamePage() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [myFleet, setMyFleet] = useState([]);
   const [myShips, setMyShips] = useState([]);
+  const myShipsRef = useRef(myShips);
   const [enemySunkShips, setEnemySunkShips] = useState([]);
   const [enemyFleet, setEnemyFleet] = useState([]);
   const [opponentNickname, setOpponentNickname] = useState(
@@ -119,6 +122,9 @@ function GamePage() {
 
   const isMyTurn = currentTurn === user?.id;
   const isTactical = gameMode === "TACTICAL";
+
+  // Keep ref in sync for use in WebSocket callbacks (avoids stale closure)
+  myShipsRef.current = myShips;
 
   let toastIdCounter = useRef(0);
 
@@ -368,15 +374,22 @@ function GamePage() {
     setTorpedoMode(false);
     setRadarMode(false);
     setRadarHoverCells([]);
+    blockedCellRef.current = null;
+    shieldBlockedThisTurnRef.current = false;
 
     // Decrement EMP if it's now my turn and I'm affected
     if (payload.nextTurn === user?.id) {
-      setAbilities((prev) => {
-        if (prev.empDisabledTurns > 0) {
-          return { ...prev, empDisabledTurns: prev.empDisabledTurns - 1 };
-        }
-        return prev;
-      });
+      if (empJustAppliedRef.current) {
+        // Skip decrement on the turn EMP was just applied (this is the first affected turn)
+        empJustAppliedRef.current = false;
+      } else {
+        setAbilities((prev) => {
+          if (prev.empDisabledTurns > 0) {
+            return { ...prev, empDisabledTurns: prev.empDisabledTurns - 1 };
+          }
+          return prev;
+        });
+      }
     }
   }
 
@@ -385,8 +398,9 @@ function GamePage() {
     const { col, row } = parseCellNotation(cell);
     const cellKey = `${col}${row}`;
 
-    // Se esta célula foi bloqueada por escudo, ignorar o ATTACK_RESULT
-    if (blockedCellRef.current === cellKey) {
+    // If this cell was blocked by shield, ignore the ATTACK_RESULT
+    if (blockedCellRef.current === cellKey || shieldBlockedThisTurnRef.current) {
+      console.log("[Shield] ATTACK_RESULT ignored (shield blocked)", cellKey);
       blockedCellRef.current = null;
       return;
     }
@@ -494,17 +508,47 @@ function GamePage() {
   }
 
   function handleShieldBlocked(payload) {
+    console.log("[Shield] SHIELD_BLOCKED received", payload);
     const { col, row } = parseCellNotation(payload.cell);
     const cellKey = `${col}${row}`;
-    // Marca a célula como bloqueada para que o próximo ATTACK_RESULT seja ignorado
+
+    // Mark cell as blocked so ATTACK_RESULT (if it arrives later) will be ignored
     blockedCellRef.current = cellKey;
+    shieldBlockedThisTurnRef.current = true;
 
     if (payload.defenderId === user?.id) {
-      // Meu escudo bloqueou ataque do oponente
+      // My shield blocked opponent's attack — revert any miss/hit mark on my board
+      setMyBoard((prev) => {
+        const cellState = prev[cellKey];
+        if (cellState === "miss" || cellState === "hit") {
+          const updated = { ...prev };
+          // Check if there's a ship at this cell to restore it
+          const hasShip = myShipsRef.current.some((ship) =>
+            ship.positions.some((p) => `${p.col}${p.row}` === cellKey),
+          );
+          if (hasShip) {
+            updated[cellKey] = "ship";
+          } else {
+            delete updated[cellKey];
+          }
+          return updated;
+        }
+        return prev;
+      });
       setAbilities((prev) => ({ ...prev, shieldActive: false }));
       addToast("SEU ESCUDO BLOQUEOU O ATAQUE!", <Shield size={16} />, "blue");
     } else {
-      // Meu tiro foi bloqueado pelo escudo do oponente
+      // My shot was blocked by opponent's shield — revert miss mark on enemy board
+      setEnemyBoard((prev) => {
+        const cellState = prev[cellKey];
+        if (cellState === "miss" || cellState === "hit") {
+          const updated = { ...prev };
+          delete updated[cellKey];
+          return updated;
+        }
+        return prev;
+      });
+      setAttackingCell(null);
       addToast(
         "ESCUDO INIMIGO BLOQUEOU SEU TIRO!",
         <Shield size={16} />,
@@ -543,6 +587,7 @@ function GamePage() {
 
   function handleEmpActivated(payload) {
     if (payload.targetId === user?.id) {
+      empJustAppliedRef.current = true;
       setAbilities((prev) => ({
         ...prev,
         empDisabledTurns: payload.disabledTurns,
