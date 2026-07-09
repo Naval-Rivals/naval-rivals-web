@@ -14,6 +14,7 @@
    - [Ranking](#ranking)
 6. [WebSocket Connection](#websocket-connection)
 7. [WebSocket Events](#websocket-events)
+   - [Lobby Events](#lobby-events)
    - [Room Events](#room-events)
    - [Placement Events](#placement-events)
    - [Game Events](#game-events)
@@ -408,6 +409,9 @@ If no body is sent, defaults to `CLASSIC` mode.
 - The creator is the `host`
 - `gameId` is `null` when the room is still waiting for an opponent
 - The `gameMode` determines which abilities are available during the match
+- **If the host already has a WAITING room, it is automatically deleted** (only one active room per host)
+- After creating the room, the frontend MUST send `/app/room/{roomId}/register` via WebSocket to enable disconnect detection
+- Rooms in WAITING status are automatically removed after **5 minutes** if no opponent joins
 
 ---
 
@@ -519,6 +523,56 @@ Leave a room.
 **Errors:**
 - 404: "Sala não encontrada"
 - 400: "Jogador não pertence a essa sala"
+
+---
+
+#### GET /rooms
+**Authentication:** Required
+
+List all rooms currently waiting for an opponent (lobby).
+
+**Response: 200 OK**
+```json
+[
+  {
+    "id": "880e8400-e29b-41d4-a716-446655440000",
+    "code": "NR-A1B2",
+    "status": "WAITING",
+    "gameMode": "CLASSIC",
+    "host": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "nickname": "PlayerOne"
+    },
+    "opponent": null,
+    "gameId": null,
+    "createdAt": "2026-07-09T14:00:00Z"
+  },
+  {
+    "id": "990e8400-e29b-41d4-a716-446655440000",
+    "code": "NR-X9Z3",
+    "status": "WAITING",
+    "gameMode": "TACTICAL",
+    "host": {
+      "id": "660e8400-e29b-41d4-a716-446655440000",
+      "nickname": "TacticalPlayer"
+    },
+    "opponent": null,
+    "gameId": null,
+    "createdAt": "2026-07-09T13:55:00Z"
+  }
+]
+```
+
+**Business Rules:**
+- Returns only rooms with status `WAITING` (rooms that have a host but no opponent yet)
+- Ordered by creation date (newest first)
+- Includes the host's own rooms (frontend can filter if needed)
+- Use `POST /rooms/join` with the room's `code` to join a room from the lobby
+- Subscribe to `/topic/lobby` for real-time updates (see [Lobby Events](#lobby-events))
+
+**Notes:**
+- Returns an empty array `[]` if no rooms are waiting
+- The `gameMode` field indicates whether the room is CLASSIC or TACTICAL — display this to the user
 
 ---
 
@@ -696,7 +750,7 @@ Get the current game state from the player's perspective.
 | shieldCharges | int | Remaining shield activations (starts at 2) |
 | shieldActive | boolean | Whether a shield is currently active (blocks next incoming shot) |
 | empNavalAvailable | boolean | Whether EMP can still be used (1 use) |
-| empDisabledTurns | int | Turns remaining where YOUR abilities are disabled (by opponent's EMP) |
+| empDisabledTurns | int | Attacks remaining where YOUR abilities are disabled (by opponent's EMP). Decrements on each attack you make or timeout. |
 
 **Errors:**
 - 404: "Partida não encontrada"
@@ -865,6 +919,34 @@ This registers the WebSocket session for disconnect tracking. Without it, the se
 ---
 
 ## WebSocket Events
+
+### Lobby Events
+
+**Topic:** `/topic/lobby`
+
+Subscribe to this topic when displaying the room lobby (list of available rooms). Events are simple signals — the frontend should re-fetch the room list via `GET /rooms` when receiving them.
+
+---
+
+#### LOBBY_UPDATED
+
+Published when the lobby state changes (room created, room filled, or room deleted).
+
+```json
+{
+  "event": "LOBBY_UPDATED"
+}
+```
+
+**Triggers:**
+- A new room is created (enters the lobby)
+- A player joins a room (room leaves the lobby)
+- A host leaves/deletes a room (room leaves the lobby)
+- An opponent leaves a full room (room returns to the lobby)
+
+**Frontend action:** Re-fetch the room list by calling `GET /rooms`.
+
+---
 
 ### Room Events
 
@@ -1311,7 +1393,7 @@ Published when a player uses their EMP Naval. Both players see this.
 |---------------|------|-------------|
 | playerId | UUID | Player who used EMP |
 | targetId | UUID | Player whose abilities are now disabled |
-| disabledTurns | int | Number of turns abilities are disabled (always 2) |
+| disabledTurns | int | Number of attacks abilities are disabled (always 2) |
 
 **Frontend action:** Show EMP effect on opponent. Disable ability buttons for the affected player. This consumes the attacker's turn.
 
@@ -1405,7 +1487,27 @@ Published when a player uses their EMP Naval. Both players see this.
 
 ---
 
-#### Register Session
+#### Register Room (Host)
+
+**Destination:** `/app/room/{roomId}/register`
+
+**Body:** empty (`{}` or no body)
+
+**Purpose:** Registers the host's WebSocket session for disconnect tracking on the room waiting screen. If the host closes the browser tab or navigates away, the server detects the disconnect and automatically deletes the WAITING room.
+
+**When to send:**
+- After creating a room (POST /rooms)
+- After subscribing to `/topic/room/{roomId}`
+
+**Important:** Only the host needs to send this. If the user is not the host of the room, the register is ignored.
+
+**What happens on host disconnect:**
+- Room is immediately deleted from the database
+- `LOBBY_UPDATED` is published on `/topic/lobby` (other users see the room disappear)
+
+---
+
+#### Register Game Session
 
 **Destination:** `/app/game/{gameId}/register`
 
@@ -1443,13 +1545,18 @@ If a reconnection is detected (player had previously disconnected), the server a
 │ 2. CREATE/JOIN ROOM                                              │
 ├─────────────────────────────────────────────────────────────────┤
 │ Host: POST /rooms → gets room code (e.g., "NR-A1B2")            │
+│       Connect WS: ws://localhost:8080/ws                         │
 │       Subscribe: /topic/room/{roomId}                            │
+│       Send: /app/room/{roomId}/register (enables disconnect det.)│
 │       Share code with friend                                     │
 │                                                                  │
 │ Opponent: POST /rooms/join {"code": "NR-A1B2"}                   │
 │           Subscribe: /topic/room/{roomId}                        │
 │                                                                  │
 │ Both receive: PLAYER_JOINED → ROOM_READY (contains gameId)       │
+│                                                                  │
+│ Note: If host closes the tab, room is automatically deleted.     │
+│ Rooms expire after 5 minutes if no opponent joins.               │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -1547,6 +1654,22 @@ If the client loses connection during a game (`PLACING_SHIPS` or `IN_PROGRESS`):
 
 - Games in `WAITING_OPPONENT` or `PLACING_SHIPS` for more than **15 minutes** are automatically removed from memory (scheduled every 5 minutes)
 - Once a game finishes, results are persisted to the database and the in-memory Game object is deleted
+
+### Room Cleanup
+
+Rooms in `WAITING` status are cleaned up through multiple mechanisms:
+
+| Mechanism | Trigger | Timing |
+|-----------|---------|--------|
+| **Host disconnect** | Host closes tab/navigates away (WebSocket disconnects) | Immediate |
+| **Room replacement** | Host creates a new room while having an existing WAITING room | Immediate (old room deleted) |
+| **Scheduler fallback** | Rooms in WAITING for more than 5 minutes | Checked every 1 minute |
+
+In all cases, `LOBBY_UPDATED` is published on `/topic/lobby` so other users see the room disappear.
+
+**Requirements for instant disconnect detection:**
+- The host must send `/app/room/{roomId}/register` after creating the room
+- Without this, cleanup relies on the 5-minute scheduler fallback
 
 ---
 
@@ -1657,7 +1780,7 @@ The game mode is chosen by the **room host** when creating the room (`"gameMode"
 | **Torpedo** | 1× | Yes (attack) | Instantly sinks the entire ship if it hits. If it misses, behaves like a normal shot. |
 | **Radar** | 1× | Yes | Scans a 3×3 area centered on the chosen cell. Reveals which cells contain ships (without revealing ship type). |
 | **Shield** | 2× | No | Activates a shield on your board. The next incoming shot is blocked (registers as miss even if it would hit). Also blocks torpedoes. |
-| **EMP Naval** | 1× | Yes | Disables ALL abilities of the opponent for their next 2 turns. They can only fire normal shots during that time. |
+| **EMP Naval** | 1× | Yes | Disables ALL abilities of the opponent for their next 2 attacks. They can only fire normal shots during that time. Each attack (hit or miss) and timeout counts toward the counter. |
 
 ### Detailed Ability Rules
 
@@ -1686,10 +1809,11 @@ The game mode is chosen by the **room host** when creating the room (`"gameMode"
 
 #### EMP Naval (Offensive)
 - Used via the **ability endpoint** with `"ability": "EMP_NAVAL"` (no cell needed)
-- Immediately disables the opponent's abilities for their **next 2 turns**
-- During those 2 turns, the opponent cannot: use torpedo, use radar, activate shield, or use EMP
+- Immediately disables the opponent's abilities for their **next 2 attacks**
+- During those 2 attacks, the opponent cannot: use torpedo, use radar, activate shield, or use EMP
+- Each attack (hit or miss) counts as 1 turn toward the EMP counter — including hits that keep the turn
+- A timeout (not attacking within 60s) also counts as 1 turn toward the EMP counter
 - Already-active defenses (shield) remain active — EMP only prevents NEW activations
-- The EMP counter decrements at the **start of each affected turn**
 - **Consumes the turn** — the player cannot attack after using EMP
 
 ### Interaction Priority (Incoming Attack)
@@ -1749,9 +1873,10 @@ Turn 3 (Player A):
   → Player B's abilities disabled for 2 turns
   → Turn passes to Player B
 
-Turn 4 (Player B):  [EMP: 2 turns remaining]
+Turn 4 (Player B):  [EMP: 2 attacks remaining]
   → Cannot use abilities! Can only fire normal shots.
   → Fires normal shot at A1 (miss, but SHIELD blocks it → registers as miss)
+  → EMP counter: 2 → 1 (each attack decrements)
   → Turn passes to Player A
 
 Turn 5 (Player A):
@@ -1765,6 +1890,7 @@ Turn 5 (Player A):
 
 | Topic | When to Subscribe | Events Received |
 |-------|-------------------|-----------------|
+| `/topic/lobby` | After navigating to lobby | LOBBY_UPDATED |
 | `/topic/room/{roomId}` | After creating/joining room | PLAYER_JOINED, ROOM_READY, PLAYER_LEFT |
 | `/topic/game/{gameId}/placement` | After receiving ROOM_READY | OPPONENT_READY, GAME_STARTED |
 | `/topic/game/{gameId}/events` | After ROOM_READY or GAME_STARTED | ATTACK_RESULT, TURN_CHANGE, TURN_TIMEOUT, SHIP_SUNK, GAME_OVER, OPPONENT_DISCONNECTED, OPPONENT_RECONNECTED, SHIELD_ACTIVATED, SHIELD_BLOCKED, RADAR_USED, EMP_ACTIVATED |
@@ -1774,6 +1900,7 @@ Turn 5 (Player A):
 
 | Destination | When to Send | Body |
 |-------------|-------------|------|
+| `/app/room/{roomId}/register` | After creating a room and subscribing to its topic | `{}` (empty) |
 | `/app/game/{gameId}/attack` | During your turn | `{"cell": "C4", "type": "NORMAL"}` |
 | `/app/game/{gameId}/ability` | During your turn (Tactical mode) | `{"ability": "RADAR", "cell": "E5"}` |
 | `/app/game/{gameId}/register` | After connecting to game WS | `{}` (empty) |
@@ -1791,6 +1918,7 @@ Turn 5 (Player A):
 | PATCH /users/me/password | ✅ Yes |
 | POST /rooms | ✅ Yes |
 | POST /rooms/join | ✅ Yes |
+| GET /rooms | ✅ Yes |
 | GET /rooms/{roomId} | ✅ Yes |
 | DELETE /rooms/{roomId} | ✅ Yes |
 | POST /games/{gameId}/ships | ✅ Yes |

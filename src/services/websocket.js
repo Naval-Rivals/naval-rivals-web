@@ -15,9 +15,21 @@ let connected = false;
  * @returns {Client} STOMP client instance
  */
 export function connect({ onConnect, onDisconnect, onError } = {}) {
+  // Already connected — call onConnect immediately
   if (client && connected) {
     onConnect?.();
     return client;
+  }
+
+  // Connection in progress — wait for it to complete, then call onConnect
+  if (client && !connected) {
+    const existingClient = client;
+    const originalOnConnect = existingClient.onConnect;
+    existingClient.onConnect = () => {
+      originalOnConnect?.();
+      onConnect?.();
+    };
+    return existingClient;
   }
 
   const token = localStorage.getItem("token");

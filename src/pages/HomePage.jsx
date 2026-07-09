@@ -4,11 +4,13 @@ import BottomNav from "../components/layout/BottomNav";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
+import LobbyPanel from "../components/game/LobbyPanel";
 import { Swords, LogIn, Anchor, Loader2, Zap, Users } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import { ws } from "../services/websocket";
 import logo from "../assets/logo-naval-rivals.png";
 import Footer from "../components/layout/Footer";
 import AlertCard from "../components/ui/AlertCard";
@@ -25,7 +27,52 @@ function HomePage() {
     type: "error",
   });
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+
+  // Lobby state
+  const [lobbyRooms, setLobbyRooms] = useState([]);
+  const [lobbyLoading, setLobbyLoading] = useState(false);
+  const [joiningCode, setJoiningCode] = useState(null);
+  const lobbySubRef = useRef(null);
+
+  const fetchRooms = useCallback(async () => {
+    try {
+      const rooms = await api.get("/rooms");
+      const filtered = (rooms || []).filter(
+        (room) => room.host?.id !== user?.id,
+      );
+      setLobbyRooms(filtered);
+    } catch (err) {
+      console.error("Failed to fetch lobby rooms:", err);
+    }
+  }, [user?.id]);
+
+  // Fetch rooms + subscribe to lobby WebSocket
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    setLobbyLoading(true);
+    fetchRooms().finally(() => setLobbyLoading(false));
+
+    ws.connect({
+      onConnect: () => {
+        lobbySubRef.current = ws.subscribe("/topic/lobby", (message) => {
+          if (message.event === "LOBBY_UPDATED") {
+            fetchRooms();
+          }
+        });
+        // Re-fetch after WS is connected to get latest state
+        fetchRooms();
+      },
+    });
+
+    return () => {
+      if (lobbySubRef.current) {
+        lobbySubRef.current.unsubscribe();
+        lobbySubRef.current = null;
+      }
+    };
+  }, [isAuthenticated, fetchRooms]);
 
   async function handleCreateRoom(gameMode) {
     if (!isAuthenticated) {
@@ -68,18 +115,7 @@ function HomePage() {
     setJoiningRoom(true);
     try {
       const room = await api.post("/rooms/join", { code });
-      if (room.gameId) {
-        navigate("/game/ship-placement", {
-          state: {
-            gameId: room.gameId,
-            roomId: room.id,
-            opponentNickname: room.host?.nickname,
-            gameMode: room.gameMode,
-          },
-        });
-      } else {
-        navigate("/game/waiting-room", { state: { room } });
-      }
+      navigateToRoom(room);
     } catch (err) {
       setAlert({
         show: true,
@@ -88,6 +124,42 @@ function HomePage() {
       });
     } finally {
       setJoiningRoom(false);
+    }
+  }
+
+  async function handleJoinFromLobby(code) {
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    setJoiningCode(code);
+    try {
+      const room = await api.post("/rooms/join", { code });
+      navigateToRoom(room);
+    } catch (err) {
+      setAlert({
+        show: true,
+        message: err.message || "Erro ao entrar na sala",
+        type: "error",
+      });
+    } finally {
+      setJoiningCode(null);
+    }
+  }
+
+  function navigateToRoom(room) {
+    if (room.gameId) {
+      navigate("/game/ship-placement", {
+        state: {
+          gameId: room.gameId,
+          roomId: room.id,
+          opponentNickname: room.host?.nickname,
+          gameMode: room.gameMode,
+        },
+      });
+    } else {
+      navigate("/game/waiting-room", { state: { room } });
     }
   }
 
@@ -216,6 +288,16 @@ function HomePage() {
             </Button>
           </form>
         </Card>
+
+        {/* Lobby - Salas disponíveis */}
+        {isAuthenticated && (
+          <LobbyPanel
+            rooms={lobbyRooms}
+            onJoinRoom={handleJoinFromLobby}
+            joiningCode={joiningCode}
+            loading={lobbyLoading}
+          />
+        )}
 
         <div className="grid grid-cols-3 gap-3 w-full">
           <div className="flex flex-col items-center gap-1 p-4 rounded-xl bg-blue-dark-900/60 border border-white/10">

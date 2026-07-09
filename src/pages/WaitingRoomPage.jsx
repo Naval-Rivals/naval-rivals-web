@@ -35,6 +35,8 @@ function WaitingRoomPage() {
   const opponentRef = useRef(null);
 
   const room = location.state?.room;
+  const leftRoomRef = useRef(false); // tracks if room was already left/canceled
+  const cleanupTimerRef = useRef(null);
 
   function handleRoomEvent(event) {
     switch (event.event) {
@@ -43,6 +45,7 @@ function WaitingRoomPage() {
         opponentRef.current = event.nickname;
         break;
       case "ROOM_READY":
+        leftRoomRef.current = true; // game started, don't delete on unmount
         // Both players are in, game created. Navigate to ship placement.
         navigate("/game/ship-placement", {
           state: {
@@ -68,6 +71,14 @@ function WaitingRoomPage() {
       return;
     }
 
+    const isHost = room.host?.id === user?.id;
+
+    // Cancel any pending cleanup timer (StrictMode re-mount)
+    if (cleanupTimerRef.current) {
+      clearTimeout(cleanupTimerRef.current);
+      cleanupTimerRef.current = null;
+    }
+
     // If room already has an opponent (user joined as opponent), it might already be FULL
     if (room.opponent) {
       setOpponent(room.opponent);
@@ -80,6 +91,14 @@ function WaitingRoomPage() {
       // we wait for ROOM_READY via WebSocket
     }
 
+    // Force WS close on full page unload (URL change, refresh, close tab)
+    function handleBeforeUnload() {
+      if (isHost && !leftRoomRef.current) {
+        ws.disconnect();
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     // Connect WebSocket and subscribe to room events
     ws.connect({
       onConnect: () => {
@@ -87,26 +106,39 @@ function WaitingRoomPage() {
           `/topic/room/${room.id}`,
           handleRoomEvent,
         );
+        // Register host session for disconnect detection
+        if (isHost) {
+          ws.publish(`/app/room/${room.id}/register`);
+        }
       },
     });
 
     return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe();
         subscriptionRef.current = null;
       }
-      ws.disconnect();
+      // Delay cleanup to allow StrictMode re-mount to cancel it
+      if (isHost && !leftRoomRef.current) {
+        cleanupTimerRef.current = setTimeout(() => {
+          api.delete(`/rooms/${room.id}`).catch(() => {});
+          ws.disconnect();
+        }, 100);
+      }
     };
   }, []);
 
   async function handleCancel() {
     setCanceling(true);
+    leftRoomRef.current = true;
     try {
       await api.delete(`/rooms/${room.id}`);
-      navigate("/", { replace: true });
     } catch {
-      navigate("/", { replace: true });
+      // Room might already be deleted, proceed anyway
     }
+    ws.disconnect();
+    navigate("/", { replace: true });
   }
 
   function handleCopy(text, setCopied) {

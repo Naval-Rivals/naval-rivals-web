@@ -22,18 +22,67 @@ function AppRoutes() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<HomePage />} />
-        <Route path="/ranking" element={<RankingPage />} />
         <Route path="/about-us" element={<AboutUsPage />} />
         <Route path="/game/rules" element={<GameRulesPage />} />
         <Route path="/join/:code" element={<JoinPage />} />
 
         {/* Rotas protegidas */}
-        <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-        <Route path="/profile/my-account" element={<ProtectedRoute><MyAccountPage /></ProtectedRoute>} />
-        <Route path="/game/waiting-room" element={<ProtectedRoute><WaitingRoomPage /></ProtectedRoute>} />
-        <Route path="/game/ship-placement" element={<ProtectedRoute><ShipPlacementPage /></ProtectedRoute>} />
-        <Route path="/game/play" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
-        <Route path="/game/result" element={<ProtectedRoute><GameResultPage /></ProtectedRoute>} />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/my-account"
+          element={
+            <ProtectedRoute>
+              <MyAccountPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/game/waiting-room"
+          element={
+            <ProtectedRoute>
+              <WaitingRoomPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/game/ship-placement"
+          element={
+            <ProtectedRoute>
+              <ShipPlacementPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/game/play"
+          element={
+            <ProtectedRoute>
+              <GamePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/game/result"
+          element={
+            <ProtectedRoute>
+              <GameResultPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ranking"
+          element={
+            <ProtectedRoute>
+              <RankingPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
