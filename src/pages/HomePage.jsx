@@ -401,14 +401,6 @@ function HomePage() {
           </section>
         )}
 
-        {/* Motivational footer line */}
-        <div className="flex items-center justify-center gap-2 py-2">
-          <Compass size={14} className="text-white/20" />
-          <span className="font-poppins text-xs text-white/30 italic">
-            Prepare sua estratégia. A vitória é para quem domina os mares.
-          </span>
-        </div>
-
         <Footer />
       </LayoutPage>
       <BottomNav />
