@@ -16,6 +16,7 @@ import {
   UserRoundX,
   Shuffle,
   Eraser,
+  LogOut,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
@@ -24,6 +25,7 @@ import GameBoard from "../components/game/GameBoard";
 import { ws } from "../services/websocket";
 import AlertCard from "../components/ui/AlertCard";
 import ModalInfo from "../components/ui/ModalInfo";
+import ModalConfirmation from "../components/ui/ModalConfirmation";
 import PlacementBoard from "../components/PlacementBoard";
 import FleetShipCard from "../components/FleetShipCard";
 import { Helmet } from "react-helmet-async";
@@ -98,6 +100,8 @@ function ShipPlacementPage() {
     message: "",
     type: "error",
   });
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   // const [opponentNickname, setOpponentNickname] = useState(
   //   location.state?.opponentNickname || "",
   // );
@@ -115,6 +119,7 @@ function ShipPlacementPage() {
     }
     sessionStorage.setItem("gameId", gameId);
     sessionStorage.setItem("gameMode", gameMode);
+    if (roomId) sessionStorage.setItem("roomId", roomId);
 
     function handleBeforeUnload(e) {
       e.preventDefault();
@@ -164,6 +169,7 @@ function ShipPlacementPage() {
             firstTurn: event.firstTurn,
             turnTimeout: event.turnTimeout,
             opponentNickname: location.state?.opponentNickname,
+            roomId,
             gameMode,
           },
           replace: true,
@@ -457,6 +463,25 @@ function ShipPlacementPage() {
     setSelectedPlacedShip(null);
   }
 
+  async function handleLeaveRoom() {
+    if (!roomId) return;
+    setLeaving(true);
+    try {
+      await api.delete(`/rooms/${roomId}`);
+      sessionStorage.removeItem("gameId");
+      sessionStorage.removeItem("roomId");
+      sessionStorage.removeItem("gameMode");
+      navigate("/", { replace: true });
+    } catch (err) {
+      setAlert({
+        show: true,
+        message: err.message || "Erro ao sair da partida",
+        type: "error",
+      });
+      setLeaving(false);
+    }
+  }
+
   async function handleSubmit() {
     if (placedShips.length !== 5) {
       setAlert({
@@ -533,6 +558,18 @@ function ShipPlacementPage() {
             Voltar ao Menu
           </Button>
         </ModalInfo>
+      )}
+
+      {showLeaveModal && (
+        <ModalConfirmation
+          title="Sair da Partida"
+          description="Tem certeza que deseja sair? A partida será cancelada."
+          confirmText={leaving ? "Saindo..." : "Sair"}
+          cancelText="Ficar"
+          variant="danger"
+          handleConfirm={handleLeaveRoom}
+          handleCancel={() => setShowLeaveModal(false)}
+        />
       )}
 
       <Header minimal />
@@ -620,6 +657,14 @@ function ShipPlacementPage() {
                 ships={placedShips.map((s) => ({ ...s, sunk: false }))}
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setShowLeaveModal(true)}
+              className="flex items-center justify-center gap-2 mx-auto mt-2 px-4 py-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-all font-poppins text-xs font-medium cursor-pointer"
+            >
+              <LogOut size={14} />
+              Sair da Partida
+            </button>
           </Card>
         ) : (
           <DragDropProvider
@@ -750,6 +795,16 @@ function ShipPlacementPage() {
                   )}
                   {submitting ? "ENVIANDO..." : "PRONTO"}
                 </Button>
+
+                {/* Leave */}
+                <button
+                  type="button"
+                  onClick={() => setShowLeaveModal(true)}
+                  className="flex items-center justify-center gap-2 mx-auto mt-2 px-4 py-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-all font-poppins text-xs font-medium cursor-pointer"
+                >
+                  <LogOut size={14} />
+                  Sair da Partida
+                </button>
               </Card>
 
               {/* Fleet panel */}

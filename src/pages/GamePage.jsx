@@ -3,6 +3,8 @@ import Header from "../components/layout/Header";
 import LayoutPage from "../components/layout/LayoutPage";
 import Card from "../components/ui/Card";
 import ModalInfo from "../components/ui/ModalInfo";
+import ModalConfirmation from "../components/ui/ModalConfirmation";
+import Button from "../components/ui/Button";
 import GameBoard from "../components/game/GameBoard";
 import ExplosionEffect from "../components/game/ExplosionEffect";
 import AbilityPanel from "../components/game/AbilityPanel";
@@ -19,6 +21,8 @@ import {
   Radar,
   Radio,
   Zap,
+  LogOut,
+  UserRoundX,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
@@ -84,6 +88,7 @@ function GamePage() {
   const initialFirstTurn = location.state?.firstTurn;
   const gameMode =
     location.state?.gameMode || sessionStorage.getItem("gameMode") || "CLASSIC";
+  const roomId = location.state?.roomId || sessionStorage.getItem("roomId");
 
   const [loading, setLoading] = useState(true);
   const [myBoard, setMyBoard] = useState({});
@@ -119,6 +124,9 @@ function GamePage() {
   const [radarMode, setRadarMode] = useState(false);
   const [radarHoverCells, setRadarHoverCells] = useState([]);
   const [toasts, setToasts] = useState([]);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [opponentLeft, setOpponentLeft] = useState(false);
 
   const isMyTurn = currentTurn === user?.id;
   const isTactical = gameMode === "TACTICAL";
@@ -187,8 +195,13 @@ function GamePage() {
             `/user/topic/game/${gameId}/events`,
             handleGameEvent,
           );
+          const subRoom = roomId
+            ? ws.subscribe(`/topic/room/${roomId}`, handleRoomEvent)
+            : null;
 
-          subscriptionsRef.current = [subEvents, subUserEvents];
+          subscriptionsRef.current = [subEvents, subUserEvents, subRoom].filter(
+            Boolean,
+          );
         },
       });
     }
@@ -316,6 +329,12 @@ function GamePage() {
     ]);
   }
 
+  function handleRoomEvent(event) {
+    if (event.event === "PLAYER_LEFT" && event.userId !== user?.id) {
+      setOpponentLeft(true);
+    }
+  }
+
   function handleGameEvent(event) {
     const { payload } = event;
     console.log("[GameEvent]", event.event, payload);
@@ -404,7 +423,10 @@ function GamePage() {
     const cellKey = `${col}${row}`;
 
     // If this cell was blocked by shield, ignore the ATTACK_RESULT
-    if (blockedCellRef.current === cellKey || shieldBlockedThisTurnRef.current) {
+    if (
+      blockedCellRef.current === cellKey ||
+      shieldBlockedThisTurnRef.current
+    ) {
       console.log("[Shield] ATTACK_RESULT ignored (shield blocked)", cellKey);
       blockedCellRef.current = null;
       return;
@@ -484,7 +506,17 @@ function GamePage() {
   }
 
   function handleGameOver(payload) {
+    // If opponent disconnected/left and we won, show modal instead of navigating immediately
+    if (
+      payload.reason === "OPPONENT_DISCONNECTED" &&
+      payload.winnerId === user?.id
+    ) {
+      setOpponentLeft(true);
+      return;
+    }
+
     sessionStorage.removeItem("gameId");
+    sessionStorage.removeItem("roomId");
     sessionStorage.removeItem("opponentNickname");
     sessionStorage.removeItem("gameMode");
     subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
@@ -672,6 +704,21 @@ function GamePage() {
     }
   }
 
+  async function handleLeaveRoom() {
+    if (!roomId) return;
+    setLeaving(true);
+    try {
+      await api.delete(`/rooms/${roomId}`);
+      sessionStorage.removeItem("gameId");
+      sessionStorage.removeItem("roomId");
+      sessionStorage.removeItem("gameMode");
+      sessionStorage.removeItem("opponentNickname");
+      navigate("/", { replace: true });
+    } catch (err) {
+      setLeaving(false);
+    }
+  }
+
   function handleToggleTorpedo() {
     if (torpedoAvailable) {
       setTorpedoMode((m) => !m);
@@ -714,6 +761,46 @@ function GamePage() {
           <span className="font-anybody font-bold text-3xl text-orange-400">
             {reconnectTime}s
           </span>
+        </ModalInfo>
+      )}
+
+      {/* Leave confirmation modal */}
+      {showLeaveModal && (
+        <ModalConfirmation
+          title="Sair da Partida"
+          description="Tem certeza que deseja sair? Isso contará como derrota."
+          confirmText={leaving ? "Saindo..." : "Sair"}
+          cancelText="Continuar"
+          variant="danger"
+          handleConfirm={handleLeaveRoom}
+          handleCancel={() => setShowLeaveModal(false)}
+        />
+      )}
+
+      {opponentLeft && (
+        <ModalInfo
+          icon={<UserRoundX className="w-12 h-12 text-red-400" />}
+          title="Oponente saiu da partida"
+          description="O oponente abandonou a batalha. Você venceu!"
+        >
+          <Button
+            variant="primary"
+            className="mt-2 flex items-center justify-center gap-2"
+            onClick={() => {
+              sessionStorage.removeItem("gameId");
+              sessionStorage.removeItem("roomId");
+              sessionStorage.removeItem("opponentNickname");
+              sessionStorage.removeItem("gameMode");
+              subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
+              subscriptionsRef.current = [];
+              navigate("/game/result", {
+                state: { gameId, winnerId: user?.id },
+                replace: true,
+              });
+            }}
+          >
+            OK
+          </Button>
         </ModalInfo>
       )}
 
@@ -884,13 +971,31 @@ function GamePage() {
 
           {/* Enemy Board */}
           <Card
-            className={`flex flex-col gap-3 w-full md:flex-1 p-4 ${
+            className={`flex flex-col gap-3 w-full md:flex-1 p-4 relative ${
               activeTab !== "enemy" ? "hidden md:flex" : "flex"
-            }`}
+            } `}
           >
             <span className="font-poppins font-semibold text-xs text-orange-300 uppercase tracking-widest text-center hidden md:block">
               Tabuleiro Inimigo
             </span>
+            {!isMyTurn && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4 rounded-2xl border border-orange-400/20 bg-blue-dark-900/70 backdrop-blur-md px-8 py-6">
+                  <Loader2
+                    size={34}
+                    className="text-orange-300 animate-spin"
+                    strokeWidth={2.5}
+                  />
+
+                  <div className="flex flex-col items-center">
+                    <span className="font-anybody text-xl font-bold text-orange-300 animate-pulse">
+                      Aguardando oponente
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="relative">
               <GameBoard
                 cells={enemyBoard}
@@ -901,6 +1006,7 @@ function GamePage() {
                 }
                 onCellLeave={radarMode ? handleCellLeave : undefined}
                 hoverCells={radarHoverCells}
+                className={`${!isMyTurn ? "blur-xs" : ""}`}
               >
                 {explosions
                   .filter((e) => e.board === "enemy")
@@ -946,6 +1052,18 @@ function GamePage() {
             ))}
           </div>
         </Card>
+
+        {/* Leave button */}
+        {roomId && (
+          <button
+            type="button"
+            onClick={() => setShowLeaveModal(true)}
+            className="flex items-center justify-center gap-2 mx-auto px-4 py-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-all font-poppins text-xs font-medium cursor-pointer"
+          >
+            <LogOut size={14} />
+            Sair da Partida
+          </button>
+        )}
       </LayoutPage>
     </div>
   );
