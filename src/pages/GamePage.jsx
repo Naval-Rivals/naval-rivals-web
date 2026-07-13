@@ -266,16 +266,7 @@ function GamePage() {
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     async function init() {
-      try {
-        const state = await api.get(`/games/${gameId}/state`);
-        buildBoardFromState(state);
-        if (state.currentTurn) setCurrentTurn(state.currentTurn);
-      } catch (err) {
-        console.error("Failed to load game state:", err);
-      } finally {
-        setLoading(false);
-      }
-
+      // Connect WebSocket FIRST to send register ASAP (cancel reconnect timeout)
       ws.connect({
         onConnect: () => {
           ws.publish(`/app/game/${gameId}/register`);
@@ -286,6 +277,26 @@ function GamePage() {
           subscriptionsRef.current = [subEvents, subUserEvents, subRoom].filter(Boolean);
         },
       });
+
+      // Then fetch game state to rebuild boards
+      try {
+        const state = await api.get(`/games/${gameId}/state`);
+        buildBoardFromState(state);
+        if (state.currentTurn) setCurrentTurn(state.currentTurn);
+      } catch (err) {
+        console.error("Failed to load game state:", err);
+        // If game no longer exists (finished/removed), go to home
+        if (err.status === 404) {
+          sessionStorage.removeItem("gameId");
+          sessionStorage.removeItem("roomId");
+          sessionStorage.removeItem("opponentNickname");
+          sessionStorage.removeItem("gameMode");
+          navigate("/", { replace: true });
+          return;
+        }
+      } finally {
+        setLoading(false);
+      }
     }
     init();
 
@@ -382,8 +393,16 @@ function GamePage() {
       case "TURN_TIMEOUT": setAttackingCell(null); break;
       case "SHIP_SUNK": handleShipSunk(payload); break;
       case "GAME_OVER": handleGameOver(payload); break;
-      case "OPPONENT_DISCONNECTED": setDisconnected(true); setReconnectTime(payload.reconnectTimeout || 30); break;
-      case "OPPONENT_RECONNECTED": setDisconnected(false); setReconnectTime(0); break;
+      case "OPPONENT_DISCONNECTED":
+        if (payload.disconnectedPlayerId !== user?.id) {
+          setDisconnected(true);
+          setReconnectTime(payload.reconnectTimeout || 30);
+        }
+        break;
+      case "OPPONENT_RECONNECTED":
+        setDisconnected(false);
+        setReconnectTime(0);
+        break;
       case "SHIELD_ACTIVATED": handleShieldActivated(payload); break;
       case "SHIELD_BLOCKED": handleShieldBlocked(payload); break;
       case "RADAR_USED": handleRadarUsed(payload); break;
@@ -394,6 +413,11 @@ function GamePage() {
   }
 
   function handleTurnChange(payload) {
+    // If we receive a turn change, opponent is connected
+    if (disconnected) {
+      setDisconnected(false);
+      setReconnectTime(0);
+    }
     if (payload.nextTurn !== currentTurn) {
       setActiveTab(payload.nextTurn === user?.id ? "enemy" : "my");
     }
@@ -419,6 +443,12 @@ function GamePage() {
     const { attackerId, cell, hit } = payload;
     const { col, row } = parseCellNotation(cell);
     const cellKey = `${col}${row}`;
+
+    // If opponent is attacking, they are clearly connected — clear disconnect overlay
+    if (attackerId !== user?.id && disconnected) {
+      setDisconnected(false);
+      setReconnectTime(0);
+    }
 
     if (blockedCellRef.current === cellKey || shieldBlockedThisTurnRef.current) {
       blockedCellRef.current = null;
@@ -732,36 +762,11 @@ function GamePage() {
           <AbilityPanel abilities={abilities} isMyTurn={isMyTurn} onUseAbility={handleUseAbility} torpedoAvailable={torpedoAvailable} torpedoMode={torpedoMode} onToggleTorpedo={handleToggleTorpedo} radarMode={radarMode} onToggleRadar={handleToggleRadar} disabled={!!attackingCell} />
         )}
 
-        {/* Mobile toggle */}
-        <div className="flex md:hidden w-full max-w-4xl">
-          <button onClick={() => setActiveTab("enemy")} className={`flex-1 py-2.5 font-poppins font-semibold text-sm text-center rounded-l-lg border-2 transition-colors cursor-pointer ${activeTab === "enemy" ? "bg-orange-500/20 border-orange-400 text-orange-300" : "bg-blue-dark-900/60 border-white/20 text-white/50"}`}>
-            TABULEIRO INIMIGO
-          </button>
-          <button onClick={() => setActiveTab("my")} className={`flex-1 py-2.5 font-poppins font-semibold text-sm text-center rounded-r-lg border-2 border-l-0 transition-colors cursor-pointer ${activeTab === "my" ? "bg-blue-300/20 border-blue-300 text-blue-300" : "bg-blue-dark-900/60 border-white/20 text-white/50"}`}>
-            SEU TABULEIRO
-          </button>
-        </div>
-
         {/* Boards */}
         <div className="flex flex-col md:flex-row gap-4 w-full max-w-4xl">
-          {/* My Board */}
-          <Card className={`flex flex-col gap-3 w-full md:flex-1 p-4 ${activeTab !== "my" ? "hidden md:flex" : "flex"}`}>
-            <span className="font-poppins font-semibold text-xs text-blue-300 uppercase tracking-widest text-center hidden md:block">Seu Tabuleiro</span>
-            <div className="relative">
-              <GameBoard cells={myBoard} ships={myShips} targetingCell={getTargetingCell("my")}>
-                {getShotEffects("my").map((anim) => (
-                  <ShotEffect key={anim.id} x={COLUMNS.indexOf(anim.col) * CELL_SIZE} y={(anim.row - 1) * CELL_SIZE} onComplete={() => completeShotAnimation(anim.id)} />
-                ))}
-                {explosions.filter((e) => e.board === "my").map((exp) => (
-                  <ExplosionEffect key={exp.id} x={exp.x} y={exp.y} width={exp.width} height={exp.height} onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))} />
-                ))}
-              </GameBoard>
-            </div>
-          </Card>
-
           {/* Enemy Board */}
-          <Card className={`flex flex-col gap-3 w-full md:flex-1 p-4 relative ${activeTab !== "enemy" ? "hidden md:flex" : "flex"}`}>
-            <span className="font-poppins font-semibold text-xs text-orange-300 uppercase tracking-widest text-center hidden md:block">Tabuleiro Inimigo</span>
+          <Card className="flex flex-col gap-3 w-full md:flex-1 md:order-2 p-4 relative">
+            <span className="font-poppins font-semibold text-xs text-orange-300 uppercase tracking-widest text-center">Tabuleiro Inimigo</span>
             {!isMyTurn && !hasEnemyBoardAnimation && (
               <div className="absolute inset-0 z-10 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4 rounded-2xl border border-orange-400/20 bg-blue-dark-900/70 backdrop-blur-md px-8 py-6">
@@ -785,6 +790,21 @@ function GamePage() {
                   <ShotEffect key={anim.id} x={COLUMNS.indexOf(anim.col) * CELL_SIZE} y={(anim.row - 1) * CELL_SIZE} onComplete={() => completeShotAnimation(anim.id)} />
                 ))}
                 {explosions.filter((e) => e.board === "enemy").map((exp) => (
+                  <ExplosionEffect key={exp.id} x={exp.x} y={exp.y} width={exp.width} height={exp.height} onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))} />
+                ))}
+              </GameBoard>
+            </div>
+          </Card>
+
+          {/* My Board */}
+          <Card className="flex flex-col gap-3 w-full md:flex-1 p-4">
+            <span className="font-poppins font-semibold text-xs text-blue-300 uppercase tracking-widest text-center">Seu Tabuleiro</span>
+            <div className="relative">
+              <GameBoard cells={myBoard} ships={myShips} targetingCell={getTargetingCell("my")}>
+                {getShotEffects("my").map((anim) => (
+                  <ShotEffect key={anim.id} x={COLUMNS.indexOf(anim.col) * CELL_SIZE} y={(anim.row - 1) * CELL_SIZE} onComplete={() => completeShotAnimation(anim.id)} />
+                ))}
+                {explosions.filter((e) => e.board === "my").map((exp) => (
                   <ExplosionEffect key={exp.id} x={exp.x} y={exp.y} width={exp.width} height={exp.height} onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))} />
                 ))}
               </GameBoard>
