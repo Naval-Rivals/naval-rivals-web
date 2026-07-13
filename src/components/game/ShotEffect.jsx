@@ -28,7 +28,7 @@ function ShotEffect({ x = 0, y = 0, onComplete }) {
     const timer = setTimeout(() => {
       setVisible(false);
       onComplete?.();
-    }, 2000);
+    }, 1500);
     return () => clearTimeout(timer);
   }, []);
 

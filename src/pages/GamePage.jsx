@@ -35,7 +35,7 @@ import ShipStatusCard from "../components/game/ShipStatusCard";
 
 const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 const CELL_SIZE = 33;
-const TARGETING_DURATION_MS = 1600;
+const TARGETING_DURATION_MS = 1100;
 
 function apiToCell(row, col) {
   return `${COLUMNS[row]}${col + 1}`;
@@ -137,6 +137,7 @@ function GamePage() {
   const shotAnimationsRef = useRef([]);
   const pendingResultsRef = useRef([]);
   const pendingShipSunkRef = useRef([]);
+  const pendingTurnChangeRef = useRef(null);
 
   const isMyTurn = currentTurn === user?.id;
   const isTactical = gameMode === "TACTICAL";
@@ -145,7 +146,12 @@ function GamePage() {
   shotAnimationsRef.current = shotAnimations;
 
   const hasEnemyBoardAnimation = shotAnimations.some(
-    (a) => a.board === "enemy" && (a.phase === "targeting" || a.phase === "shot"),
+    (a) =>
+      a.board === "enemy" && (a.phase === "targeting" || a.phase === "shot"),
+  );
+
+  const hasAnyAnimation = shotAnimations.some(
+    (a) => a.phase === "targeting" || a.phase === "shot",
   );
 
   const toastIdCounter = useRef(0);
@@ -215,6 +221,13 @@ function GamePage() {
     if (remaining.length === 0) {
       setAttackingCell(null);
     }
+
+    // If no more animations at all, process pending turn change
+    if (shotAnimationsRef.current.length === 0 && pendingTurnChangeRef.current) {
+      const pendingTC = pendingTurnChangeRef.current;
+      pendingTurnChangeRef.current = null;
+      executeTurnChange(pendingTC);
+    }
   }
 
   function revealAttackResult({ attackerId, col, row, hit }) {
@@ -245,7 +258,6 @@ function GamePage() {
     );
   }
 
-
   // --- Effects ---
 
   useEffect(() => {
@@ -256,7 +268,10 @@ function GamePage() {
     sessionStorage.setItem("gameId", gameId);
     sessionStorage.setItem("gameMode", gameMode);
     if (location.state?.opponentNickname) {
-      sessionStorage.setItem("opponentNickname", location.state.opponentNickname);
+      sessionStorage.setItem(
+        "opponentNickname",
+        location.state.opponentNickname,
+      );
     }
 
     function handleBeforeUnload(e) {
@@ -271,10 +286,20 @@ function GamePage() {
         onConnect: () => {
           ws.publish(`/app/game/${gameId}/register`);
           subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
-          const subEvents = ws.subscribe(`/topic/game/${gameId}/events`, handleGameEvent);
-          const subUserEvents = ws.subscribe(`/user/topic/game/${gameId}/events`, handleGameEvent);
-          const subRoom = roomId ? ws.subscribe(`/topic/room/${roomId}`, handleRoomEvent) : null;
-          subscriptionsRef.current = [subEvents, subUserEvents, subRoom].filter(Boolean);
+          const subEvents = ws.subscribe(
+            `/topic/game/${gameId}/events`,
+            handleGameEvent,
+          );
+          const subUserEvents = ws.subscribe(
+            `/user/topic/game/${gameId}/events`,
+            handleGameEvent,
+          );
+          const subRoom = roomId
+            ? ws.subscribe(`/topic/room/${roomId}`, handleRoomEvent)
+            : null;
+          subscriptionsRef.current = [subEvents, subUserEvents, subRoom].filter(
+            Boolean,
+          );
         },
       });
 
@@ -314,18 +339,26 @@ function GamePage() {
     setTimeLeft(60);
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
-        if (prev <= 1) { clearInterval(timerRef.current); return 0; }
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          return 0;
+        }
         return prev - 1;
       });
     }, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [currentTurn, loading, disconnected]);
 
   useEffect(() => {
     if (!disconnected || reconnectTime <= 0) return;
     const interval = setInterval(() => {
       setReconnectTime((prev) => {
-        if (prev <= 1) { clearInterval(interval); return 0; }
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
         return prev - 1;
       });
     }, 1000);
@@ -340,10 +373,22 @@ function GamePage() {
     const shipsWithPositions = [];
 
     for (const ship of state.myShips || []) {
-      const shipPositions = ship.positions.map((p) => ({ col: COLUMNS[p.row], row: p.col + 1 }));
+      const shipPositions = ship.positions.map((p) => ({
+        col: COLUMNS[p.row],
+        row: p.col + 1,
+      }));
       const shipCellKeys = shipPositions.map((p) => `${p.col}${p.row}`);
-      fleet.push({ type: ship.type, name: getShipName(ship.type), size: shipPositions.length, sunk: ship.sunk });
-      shipsWithPositions.push({ type: ship.type, positions: shipPositions, sunk: ship.sunk });
+      fleet.push({
+        type: ship.type,
+        name: getShipName(ship.type),
+        size: shipPositions.length,
+        sunk: ship.sunk,
+      });
+      shipsWithPositions.push({
+        type: ship.type,
+        positions: shipPositions,
+        sunk: ship.sunk,
+      });
       for (const cellKey of shipCellKeys) {
         myCells[cellKey] = ship.sunk ? "sunk" : "ship";
       }
@@ -361,7 +406,8 @@ function GamePage() {
     setMyBoard(myCells);
     setMyFleet(fleet);
     setMyShips(shipsWithPositions);
-    if (state.torpedoAvailable !== undefined) setTorpedoAvailable(state.torpedoAvailable);
+    if (state.torpedoAvailable !== undefined)
+      setTorpedoAvailable(state.torpedoAvailable);
     if (state.abilities) setAbilities(state.abilities);
 
     const enemyCells = {};
@@ -382,17 +428,28 @@ function GamePage() {
   // --- WebSocket event handlers ---
 
   function handleRoomEvent(event) {
-    if (event.event === "PLAYER_LEFT" && event.userId !== user?.id) setOpponentLeft(true);
+    if (event.event === "PLAYER_LEFT" && event.userId !== user?.id)
+      setOpponentLeft(true);
   }
 
   function handleGameEvent(event) {
     const { payload } = event;
     switch (event.event) {
-      case "ATTACK_RESULT": handleAttackResult(payload); break;
-      case "TURN_CHANGE": handleTurnChange(payload); break;
-      case "TURN_TIMEOUT": setAttackingCell(null); break;
-      case "SHIP_SUNK": handleShipSunk(payload); break;
-      case "GAME_OVER": handleGameOver(payload); break;
+      case "ATTACK_RESULT":
+        handleAttackResult(payload);
+        break;
+      case "TURN_CHANGE":
+        handleTurnChange(payload);
+        break;
+      case "TURN_TIMEOUT":
+        setAttackingCell(null);
+        break;
+      case "SHIP_SUNK":
+        handleShipSunk(payload);
+        break;
+      case "GAME_OVER":
+        handleGameOver(payload);
+        break;
       case "OPPONENT_DISCONNECTED":
         if (payload.disconnectedPlayerId !== user?.id) {
           setDisconnected(true);
@@ -403,16 +460,36 @@ function GamePage() {
         setDisconnected(false);
         setReconnectTime(0);
         break;
-      case "SHIELD_ACTIVATED": handleShieldActivated(payload); break;
-      case "SHIELD_BLOCKED": handleShieldBlocked(payload); break;
-      case "RADAR_USED": handleRadarUsed(payload); break;
-      case "RADAR_RESULT": handleRadarResult(payload); break;
-      case "EMP_ACTIVATED": handleEmpActivated(payload); break;
-      default: break;
+      case "SHIELD_ACTIVATED":
+        handleShieldActivated(payload);
+        break;
+      case "SHIELD_BLOCKED":
+        handleShieldBlocked(payload);
+        break;
+      case "RADAR_USED":
+        handleRadarUsed(payload);
+        break;
+      case "RADAR_RESULT":
+        handleRadarResult(payload);
+        break;
+      case "EMP_ACTIVATED":
+        handleEmpActivated(payload);
+        break;
+      default:
+        break;
     }
   }
 
   function handleTurnChange(payload) {
+    // If animations are running, defer turn change until they complete
+    if (shotAnimationsRef.current.some((a) => a.phase === "targeting" || a.phase === "shot")) {
+      pendingTurnChangeRef.current = payload;
+      return;
+    }
+    executeTurnChange(payload);
+  }
+
+  function executeTurnChange(payload) {
     // If we receive a turn change, opponent is connected
     if (disconnected) {
       setDisconnected(false);
@@ -434,7 +511,11 @@ function GamePage() {
       if (empJustAppliedRef.current) {
         empJustAppliedRef.current = false;
       } else {
-        setAbilities((prev) => prev.empDisabledTurns > 0 ? { ...prev, empDisabledTurns: prev.empDisabledTurns - 1 } : prev);
+        setAbilities((prev) =>
+          prev.empDisabledTurns > 0
+            ? { ...prev, empDisabledTurns: prev.empDisabledTurns - 1 }
+            : prev,
+        );
       }
     }
   }
@@ -450,7 +531,10 @@ function GamePage() {
       setReconnectTime(0);
     }
 
-    if (blockedCellRef.current === cellKey || shieldBlockedThisTurnRef.current) {
+    if (
+      blockedCellRef.current === cellKey ||
+      shieldBlockedThisTurnRef.current
+    ) {
       blockedCellRef.current = null;
       return;
     }
@@ -458,11 +542,19 @@ function GamePage() {
     if (attackerId === user?.id) {
       // Own attack — find targeting animation already running on enemy board
       const existingAnim = shotAnimationsRef.current.find(
-        (a) => a.board === "enemy" && (a.phase === "targeting" || a.phase === "shot"),
+        (a) =>
+          a.board === "enemy" &&
+          (a.phase === "targeting" || a.phase === "shot"),
       );
       if (existingAnim) {
         // Store result to reveal AFTER animation completes
-        pendingResultsRef.current.push({ animId: existingAnim.id, attackerId, col, row, hit });
+        pendingResultsRef.current.push({
+          animId: existingAnim.id,
+          attackerId,
+          col,
+          row,
+          hit,
+        });
       } else {
         // No animation (edge case) — reveal immediately
         revealAttackResult({ attackerId, col, row, hit });
@@ -480,7 +572,8 @@ function GamePage() {
 
     // Find any active animation on this board
     const activeAnim = shotAnimationsRef.current.find(
-      (a) => a.board === board && (a.phase === "targeting" || a.phase === "shot"),
+      (a) =>
+        a.board === board && (a.phase === "targeting" || a.phase === "shot"),
     );
 
     if (activeAnim) {
@@ -502,33 +595,54 @@ function GamePage() {
     const maxRow = Math.max(...rowIndices);
 
     const explosionId = `${shipType}-${Date.now()}`;
-    setExplosions((prev) => [...prev, {
-      id: explosionId,
-      x: minCol * CELL_SIZE,
-      y: minRow * CELL_SIZE,
-      width: (maxCol - minCol + 1) * CELL_SIZE,
-      height: (maxRow - minRow + 1) * CELL_SIZE,
-      board: ownerId === user?.id ? "my" : "enemy",
-    }]);
+    setExplosions((prev) => [
+      ...prev,
+      {
+        id: explosionId,
+        x: minCol * CELL_SIZE,
+        y: minRow * CELL_SIZE,
+        width: (maxCol - minCol + 1) * CELL_SIZE,
+        height: (maxRow - minRow + 1) * CELL_SIZE,
+        board: ownerId === user?.id ? "my" : "enemy",
+      },
+    ]);
 
     if (ownerId === user?.id) {
-      setMyFleet((prev) => prev.map((s) => s.type === shipType ? { ...s, sunk: true } : s));
-      setMyShips((prev) => prev.map((s) => s.type === shipType ? { ...s, sunk: true } : s));
+      setMyFleet((prev) =>
+        prev.map((s) => (s.type === shipType ? { ...s, sunk: true } : s)),
+      );
+      setMyShips((prev) =>
+        prev.map((s) => (s.type === shipType ? { ...s, sunk: true } : s)),
+      );
       const sunkCells = {};
-      for (const c of positions) { const { col, row } = parseCellNotation(c); sunkCells[`${col}${row}`] = "sunk"; }
+      for (const c of positions) {
+        const { col, row } = parseCellNotation(c);
+        sunkCells[`${col}${row}`] = "sunk";
+      }
       setMyBoard((prev) => ({ ...prev, ...sunkCells }));
     } else {
       const sunkPositions = positions.map((c) => parseCellNotation(c));
-      setEnemyFleet((prev) => prev.map((s) => s.type === shipType ? { ...s, status: "sunk" } : s));
-      setEnemySunkShips((prev) => [...prev, { type: shipType, positions: sunkPositions, sunk: true }]);
+      setEnemyFleet((prev) =>
+        prev.map((s) => (s.type === shipType ? { ...s, status: "sunk" } : s)),
+      );
+      setEnemySunkShips((prev) => [
+        ...prev,
+        { type: shipType, positions: sunkPositions, sunk: true },
+      ]);
       const sunkCells = {};
-      for (const c of positions) { const { col, row } = parseCellNotation(c); sunkCells[`${col}${row}`] = "sunk"; }
+      for (const c of positions) {
+        const { col, row } = parseCellNotation(c);
+        sunkCells[`${col}${row}`] = "sunk";
+      }
       setEnemyBoard((prev) => ({ ...prev, ...sunkCells }));
     }
   }
 
   function handleGameOver(payload) {
-    if (payload.reason === "OPPONENT_DISCONNECTED" && payload.winnerId === user?.id) {
+    if (
+      payload.reason === "OPPONENT_DISCONNECTED" &&
+      payload.winnerId === user?.id
+    ) {
       setOpponentLeft(true);
       return;
     }
@@ -538,14 +652,21 @@ function GamePage() {
     sessionStorage.removeItem("gameMode");
     subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
     subscriptionsRef.current = [];
-    navigate("/game/result", { state: { gameId, winnerId: payload.winnerId }, replace: true });
+    navigate("/game/result", {
+      state: { gameId, winnerId: payload.winnerId },
+      replace: true,
+    });
   }
 
   // --- Tactical ability handlers ---
 
   function handleShieldActivated(payload) {
     if (payload.playerId === user?.id) {
-      setAbilities((prev) => ({ ...prev, shieldActive: true, shieldCharges: payload.remainingCharges }));
+      setAbilities((prev) => ({
+        ...prev,
+        shieldActive: true,
+        shieldCharges: payload.remainingCharges,
+      }));
     }
   }
 
@@ -556,16 +677,24 @@ function GamePage() {
     shieldBlockedThisTurnRef.current = true;
 
     // Cancel any pending shot animation for this cell
-    shotAnimationsRef.current = shotAnimationsRef.current.filter((a) => !(a.col === col && a.row === row));
-    setShotAnimations((prev) => prev.filter((a) => !(a.col === col && a.row === row)));
-    pendingResultsRef.current = pendingResultsRef.current.filter((p) => !(p.col === col && p.row === row));
+    shotAnimationsRef.current = shotAnimationsRef.current.filter(
+      (a) => !(a.col === col && a.row === row),
+    );
+    setShotAnimations((prev) =>
+      prev.filter((a) => !(a.col === col && a.row === row)),
+    );
+    pendingResultsRef.current = pendingResultsRef.current.filter(
+      (p) => !(p.col === col && p.row === row),
+    );
 
     if (payload.defenderId === user?.id) {
       setMyBoard((prev) => {
         const cellState = prev[cellKey];
         if (cellState === "miss" || cellState === "hit") {
           const updated = { ...prev };
-          const hasShip = myShipsRef.current.some((ship) => ship.positions.some((p) => `${p.col}${p.row}` === cellKey));
+          const hasShip = myShipsRef.current.some((ship) =>
+            ship.positions.some((p) => `${p.col}${p.row}` === cellKey),
+          );
           updated[cellKey] = hasShip ? "ship" : undefined;
           if (!hasShip) delete updated[cellKey];
           return updated;
@@ -577,23 +706,39 @@ function GamePage() {
     } else {
       setEnemyBoard((prev) => {
         const cellState = prev[cellKey];
-        if (cellState === "miss" || cellState === "hit") { const updated = { ...prev }; delete updated[cellKey]; return updated; }
+        if (cellState === "miss" || cellState === "hit") {
+          const updated = { ...prev };
+          delete updated[cellKey];
+          return updated;
+        }
         return prev;
       });
       setAttackingCell(null);
-      addToast("ESCUDO INIMIGO BLOQUEOU SEU TIRO!", <Shield size={16} />, "blue");
+      addToast(
+        "ESCUDO INIMIGO BLOQUEOU SEU TIRO!",
+        <Shield size={16} />,
+        "blue",
+      );
     }
   }
 
   function handleRadarUsed(payload) {
-    if (payload.playerId === user?.id) { setAbilities((prev) => ({ ...prev, radarAvailable: false })); setRadarMode(false); setRadarHoverCells([]); }
-    else { addToast("OPONENTE USOU RADAR", <Radar size={16} />, "green"); }
+    if (payload.playerId === user?.id) {
+      setAbilities((prev) => ({ ...prev, radarAvailable: false }));
+      setRadarMode(false);
+      setRadarHoverCells([]);
+    } else {
+      addToast("OPONENTE USOU RADAR", <Radar size={16} />, "green");
+    }
   }
 
   function handleRadarResult(payload) {
     if (payload.revealedCells && payload.revealedCells.length > 0) {
       const radarCells = {};
-      for (const c of payload.revealedCells) { const { col, row } = parseCellNotation(c); radarCells[`${col}${row}`] = "radar"; }
+      for (const c of payload.revealedCells) {
+        const { col, row } = parseCellNotation(c);
+        radarCells[`${col}${row}`] = "radar";
+      }
       setEnemyBoard((prev) => ({ ...prev, ...radarCells }));
       addToast("RADAR: NAVIO(S) DETECTADO(S)", <Radar size={16} />, "green");
     } else {
@@ -604,7 +749,10 @@ function GamePage() {
   function handleEmpActivated(payload) {
     if (payload.targetId === user?.id) {
       empJustAppliedRef.current = true;
-      setAbilities((prev) => ({ ...prev, empDisabledTurns: payload.disabledTurns }));
+      setAbilities((prev) => ({
+        ...prev,
+        empDisabledTurns: payload.disabledTurns,
+      }));
       addToast("EMP: HABILIDADES DESATIVADAS", <Zap size={16} />, "yellow");
     } else {
       setAbilities((prev) => ({ ...prev, empNavalAvailable: false }));
@@ -615,11 +763,14 @@ function GamePage() {
   // --- Cell interaction handlers ---
 
   function handleCellClick(col, row) {
-    if (!isMyTurn || attackingCell) return;
+    if (!isMyTurn || attackingCell || hasAnyAnimation) return;
     const cellKey = `${col}${row}`;
 
     if (radarMode) {
-      ws.publish(`/app/game/${gameId}/ability`, { ability: "RADAR", cell: boardClickToCell(col, row) });
+      ws.publish(`/app/game/${gameId}/ability`, {
+        ability: "RADAR",
+        cell: boardClickToCell(col, row),
+      });
       setAttackingCell(cellKey);
       setRadarMode(false);
       setRadarHoverCells([]);
@@ -633,19 +784,31 @@ function GamePage() {
     startShotAnimation(col, row, "enemy");
 
     const payload = { cell: boardClickToCell(col, row) };
-    if (torpedoMode) { payload.type = "TORPEDO"; setTorpedoAvailable(false); setTorpedoMode(false); }
+    if (torpedoMode) {
+      payload.type = "TORPEDO";
+      setTorpedoAvailable(false);
+      setTorpedoMode(false);
+    }
     ws.publish(`/app/game/${gameId}/attack`, payload);
   }
 
-  function handleCellHover(col, row) { if (radarMode) setRadarHoverCells(getRadarCells(col, row)); }
-  function handleCellLeave() { if (radarMode) setRadarHoverCells([]); }
+  function handleCellHover(col, row) {
+    if (radarMode) setRadarHoverCells(getRadarCells(col, row));
+  }
+  function handleCellLeave() {
+    if (radarMode) setRadarHoverCells([]);
+  }
 
   function handleUseAbility(ability) {
     if (!isMyTurn || abilities.empDisabledTurns > 0) return;
     switch (ability) {
       case "SHIELD":
         ws.publish(`/app/game/${gameId}/ability`, { ability: "SHIELD" });
-        setAbilities((prev) => ({ ...prev, shieldActive: true, shieldCharges: prev.shieldCharges - 1 }));
+        setAbilities((prev) => ({
+          ...prev,
+          shieldActive: true,
+          shieldCharges: prev.shieldCharges - 1,
+        }));
         addToast("ESCUDO ATIVADO", <Shield size={16} />, "blue");
         break;
       case "EMP_NAVAL":
@@ -653,7 +816,8 @@ function GamePage() {
         setAbilities((prev) => ({ ...prev, empNavalAvailable: false }));
         setAttackingCell("emp");
         break;
-      default: break;
+      default:
+        break;
     }
   }
 
@@ -667,39 +831,85 @@ function GamePage() {
       sessionStorage.removeItem("gameMode");
       sessionStorage.removeItem("opponentNickname");
       navigate("/", { replace: true });
-    } catch (err) { setLeaving(false); }
+    } catch (err) {
+      setLeaving(false);
+    }
   }
 
-  function handleToggleTorpedo() { if (torpedoAvailable) { setTorpedoMode((m) => !m); setRadarMode(false); setRadarHoverCells([]); } }
-  function handleToggleRadar() { if (abilities.radarAvailable) { setRadarMode((m) => !m); setTorpedoMode(false); if (!radarMode) setRadarHoverCells([]); } }
+  function handleToggleTorpedo() {
+    if (torpedoAvailable) {
+      setTorpedoMode((m) => !m);
+      setRadarMode(false);
+      setRadarHoverCells([]);
+    }
+  }
+  function handleToggleRadar() {
+    if (abilities.radarAvailable) {
+      setRadarMode((m) => !m);
+      setTorpedoMode(false);
+      if (!radarMode) setRadarHoverCells([]);
+    }
+  }
 
   if (loading) return <Spinner message="Carregando batalha..." />;
 
   const timerFormatted = `${String(Math.floor(timeLeft / 60)).padStart(2, "0")}:${String(timeLeft % 60).padStart(2, "0")}`;
 
-
   return (
     <div className="h-screen flex flex-col overflow-hidden relative">
-      <Helmet><title>Batalha - Naval Rivals</title></Helmet>
+      <Helmet>
+        <title>Batalha - Naval Rivals</title>
+      </Helmet>
       <BattleToast toasts={toasts} onDismiss={dismissToast} />
 
       {disconnected && (
-        <ModalInfo icon={<WifiOff className="w-12 h-12 text-red-400" />} title="Oponente desconectou" description="Aguardando reconexão...">
-          <span className="font-anybody font-bold text-3xl text-orange-400">{reconnectTime}s</span>
+        <ModalInfo
+          icon={<WifiOff className="w-12 h-12 text-red-400" />}
+          title="Oponente desconectou"
+          description="Aguardando reconexão..."
+        >
+          <span className="font-anybody font-bold text-3xl text-orange-400">
+            {reconnectTime}s
+          </span>
         </ModalInfo>
       )}
 
       {showLeaveModal && (
-        <ModalConfirmation title="Sair da Partida" description="Tem certeza que deseja sair? Isso contará como derrota." confirmText={leaving ? "Saindo..." : "Sair"} cancelText="Continuar" variant="danger" handleConfirm={handleLeaveRoom} handleCancel={() => setShowLeaveModal(false)} />
+        <ModalConfirmation
+          title="Sair da Partida"
+          description="Tem certeza que deseja sair? Isso contará como derrota."
+          confirmText={leaving ? "Saindo..." : "Sair"}
+          cancelText="Continuar"
+          variant="danger"
+          handleConfirm={handleLeaveRoom}
+          handleCancel={() => setShowLeaveModal(false)}
+        />
       )}
 
       {opponentLeft && (
-        <ModalInfo icon={<UserRoundX className="w-12 h-12 text-red-400" />} title="Oponente saiu da partida" description="O oponente abandonou a batalha. Você venceu!">
-          <Button variant="primary" className="mt-2 flex items-center justify-center gap-2" onClick={() => {
-            sessionStorage.removeItem("gameId"); sessionStorage.removeItem("roomId"); sessionStorage.removeItem("opponentNickname"); sessionStorage.removeItem("gameMode");
-            subscriptionsRef.current.forEach((sub) => sub?.unsubscribe()); subscriptionsRef.current = [];
-            navigate("/game/result", { state: { gameId, winnerId: user?.id }, replace: true });
-          }}>OK</Button>
+        <ModalInfo
+          icon={<UserRoundX className="w-12 h-12 text-red-400" />}
+          title="Oponente saiu da partida"
+          description="O oponente abandonou a batalha. Você venceu!"
+        >
+          <Button
+            variant="primary"
+            className="mt-2 flex items-center justify-center gap-2"
+            onClick={() => {
+              sessionStorage.removeItem("gameId");
+              sessionStorage.removeItem("roomId");
+              sessionStorage.removeItem("opponentNickname");
+              sessionStorage.removeItem("gameMode");
+              subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
+              subscriptionsRef.current = [];
+              navigate("/game/result", {
+                state: { gameId, winnerId: user?.id },
+                replace: true,
+              });
+            }}
+          >
+            OK
+          </Button>
         </ModalInfo>
       )}
 
@@ -718,18 +928,30 @@ function GamePage() {
               <CircleUserRound size={18} className="text-blue-300" />
             </div>
             <div className="flex flex-col">
-              <span className="font-poppins font-semibold text-xs text-white">{user?.nickname}</span>
+              <span className="font-poppins font-semibold text-xs text-white">
+                {user?.nickname}
+              </span>
               <div className="flex items-center gap-1">
-                <span className="font-poppins text-[10px] text-white/40">Você</span>
-                {isTactical && abilities.shieldActive && <Shield size={10} className="text-blue-400 animate-pulse" />}
+                <span className="font-poppins text-[10px] text-white/40">
+                  Você
+                </span>
+                {isTactical && abilities.shieldActive && (
+                  <Shield size={10} className="text-blue-400 animate-pulse" />
+                )}
               </div>
             </div>
           </div>
-          <span className="font-anybody font-extrabold text-lg text-white/30">VS</span>
+          <span className="font-anybody font-extrabold text-lg text-white/30">
+            VS
+          </span>
           <div className="flex items-center gap-2">
             <div className="flex flex-col items-end">
-              <span className="font-poppins font-semibold text-xs text-white">{opponentNickname}</span>
-              <span className="font-poppins text-[10px] text-white/40">Oponente</span>
+              <span className="font-poppins font-semibold text-xs text-white">
+                {opponentNickname}
+              </span>
+              <span className="font-poppins text-[10px] text-white/40">
+                Oponente
+              </span>
             </div>
             <div className="w-9 h-9 rounded-full bg-blue-dark-900 border-2 border-orange-300 flex items-center justify-center">
               <CircleUserRound size={18} className="text-orange-300" />
@@ -738,40 +960,73 @@ function GamePage() {
         </Card>
 
         {/* Turn + Timer */}
-        <Card className={`flex items-center justify-between w-full max-w-4xl p-4 ${isMyTurn ? "border-orange-400!" : "border-blue-300/30!"}`}>
+        <Card
+          className={`flex items-center justify-between w-full max-w-4xl p-4 ${isMyTurn ? "border-orange-400!" : "border-blue-300/30!"}`}
+        >
           <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isMyTurn ? "bg-orange-500/20 border border-orange-400/50 animate-pulse" : "bg-blue-300/10 border border-blue-300/30"}`}>
-              <Flame size={16} className={isMyTurn ? "text-orange-400" : "text-blue-300/50"} />
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${isMyTurn ? "bg-orange-500/20 border border-orange-400/50 animate-pulse" : "bg-blue-300/10 border border-blue-300/30"}`}
+            >
+              <Flame
+                size={16}
+                className={isMyTurn ? "text-orange-400" : "text-blue-300/50"}
+              />
             </div>
             <div className="flex flex-col">
-              <span className={`font-poppins font-semibold text-sm ${isMyTurn ? "text-orange-300" : "text-blue-300/70"}`}>
+              <span
+                className={`font-poppins font-semibold text-sm ${isMyTurn ? "text-orange-300" : "text-blue-300/70"}`}
+              >
                 {isMyTurn ? "SUA VEZ DE ATACAR!" : "VEZ DO OPONENTE..."}
               </span>
               {isTactical && abilities.empDisabledTurns > 0 && (
-                <span className="font-poppins text-[10px] text-yellow-400">⚡ EMP: {abilities.empDisabledTurns} turno(s)</span>
+                <span className="font-poppins text-[10px] text-yellow-400">
+                  ⚡ EMP: {abilities.empDisabledTurns} turno(s)
+                </span>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-dark-900 border border-blue-300/30">
             <Clock size={14} className="text-blue-300" />
-            <span className={`font-anybody font-bold text-lg ${timeLeft <= 10 ? "text-red-400" : "text-white"}`}>{timerFormatted}</span>
+            <span
+              className={`font-anybody font-bold text-lg ${timeLeft <= 10 ? "text-red-400" : "text-white"}`}
+            >
+              {timerFormatted}
+            </span>
           </div>
         </Card>
 
         {isTactical && (
-          <AbilityPanel abilities={abilities} isMyTurn={isMyTurn} onUseAbility={handleUseAbility} torpedoAvailable={torpedoAvailable} torpedoMode={torpedoMode} onToggleTorpedo={handleToggleTorpedo} radarMode={radarMode} onToggleRadar={handleToggleRadar} disabled={!!attackingCell} />
+          <AbilityPanel
+            abilities={abilities}
+            isMyTurn={isMyTurn}
+            onUseAbility={handleUseAbility}
+            torpedoAvailable={torpedoAvailable}
+            torpedoMode={torpedoMode}
+            onToggleTorpedo={handleToggleTorpedo}
+            radarMode={radarMode}
+            onToggleRadar={handleToggleRadar}
+            disabled={!!attackingCell}
+          />
         )}
 
         {/* Boards */}
         <div className="flex flex-col md:flex-row gap-4 w-full max-w-4xl">
           {/* Enemy Board */}
           <Card className="flex flex-col gap-3 w-full md:flex-1 md:order-2 p-4 relative">
-            <span className="font-poppins font-semibold text-xs text-orange-300 uppercase tracking-widest text-center">Tabuleiro Inimigo</span>
-            {!isMyTurn && !hasEnemyBoardAnimation && (
+            <span className="font-poppins font-semibold text-xs text-orange-300 uppercase tracking-widest text-center">
+              Tabuleiro Inimigo
+            </span>
+            {!isMyTurn && (
               <div className="absolute inset-0 z-10 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4 rounded-2xl border border-orange-400/20 bg-blue-dark-900/70 backdrop-blur-md px-8 py-6">
-                  <Loader2 size={34} className="text-orange-300 animate-spin" strokeWidth={2.5} />
-                  <span className="font-anybody text-xl font-bold text-orange-300 animate-pulse">Aguardando oponente</span>
+                  <Loader2
+                    size={34}
+                    className="text-orange-300 animate-spin"
+                    strokeWidth={2.5}
+                  />
+                  <span className="font-anybody text-xl font-bold text-orange-300 animate-pulse">
+                    Aguardando oponente
+                  </span>
                 </div>
               </div>
             )}
@@ -779,34 +1034,78 @@ function GamePage() {
               <GameBoard
                 cells={enemyBoard}
                 ships={enemySunkShips}
-                onCellClick={isMyTurn ? handleCellClick : undefined}
-                onCellHover={radarMode && isMyTurn ? handleCellHover : undefined}
+                onCellClick={isMyTurn && !hasAnyAnimation ? handleCellClick : undefined}
+                onCellHover={
+                  radarMode && isMyTurn ? handleCellHover : undefined
+                }
                 onCellLeave={radarMode ? handleCellLeave : undefined}
                 hoverCells={radarHoverCells}
                 targetingCell={getTargetingCell("enemy")}
-                className={`${!isMyTurn && !hasEnemyBoardAnimation ? "blur-xs" : ""}`}
+                className={`${!isMyTurn ? "blur-xs" : ""}`}
               >
                 {getShotEffects("enemy").map((anim) => (
-                  <ShotEffect key={anim.id} x={COLUMNS.indexOf(anim.col) * CELL_SIZE} y={(anim.row - 1) * CELL_SIZE} onComplete={() => completeShotAnimation(anim.id)} />
+                  <ShotEffect
+                    key={anim.id}
+                    x={COLUMNS.indexOf(anim.col) * CELL_SIZE}
+                    y={(anim.row - 1) * CELL_SIZE}
+                    onComplete={() => completeShotAnimation(anim.id)}
+                  />
                 ))}
-                {explosions.filter((e) => e.board === "enemy").map((exp) => (
-                  <ExplosionEffect key={exp.id} x={exp.x} y={exp.y} width={exp.width} height={exp.height} onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))} />
-                ))}
+                {explosions
+                  .filter((e) => e.board === "enemy")
+                  .map((exp) => (
+                    <ExplosionEffect
+                      key={exp.id}
+                      x={exp.x}
+                      y={exp.y}
+                      width={exp.width}
+                      height={exp.height}
+                      onComplete={() =>
+                        setExplosions((prev) =>
+                          prev.filter((e) => e.id !== exp.id),
+                        )
+                      }
+                    />
+                  ))}
               </GameBoard>
             </div>
           </Card>
 
           {/* My Board */}
           <Card className="flex flex-col gap-3 w-full md:flex-1 p-4">
-            <span className="font-poppins font-semibold text-xs text-blue-300 uppercase tracking-widest text-center">Seu Tabuleiro</span>
+            <span className="font-poppins font-semibold text-xs text-blue-300 uppercase tracking-widest text-center">
+              Seu Tabuleiro
+            </span>
             <div className="relative">
-              <GameBoard cells={myBoard} ships={myShips} targetingCell={getTargetingCell("my")}>
+              <GameBoard
+                cells={myBoard}
+                ships={myShips}
+                targetingCell={getTargetingCell("my")}
+              >
                 {getShotEffects("my").map((anim) => (
-                  <ShotEffect key={anim.id} x={COLUMNS.indexOf(anim.col) * CELL_SIZE} y={(anim.row - 1) * CELL_SIZE} onComplete={() => completeShotAnimation(anim.id)} />
+                  <ShotEffect
+                    key={anim.id}
+                    x={COLUMNS.indexOf(anim.col) * CELL_SIZE}
+                    y={(anim.row - 1) * CELL_SIZE}
+                    onComplete={() => completeShotAnimation(anim.id)}
+                  />
                 ))}
-                {explosions.filter((e) => e.board === "my").map((exp) => (
-                  <ExplosionEffect key={exp.id} x={exp.x} y={exp.y} width={exp.width} height={exp.height} onComplete={() => setExplosions((prev) => prev.filter((e) => e.id !== exp.id))} />
-                ))}
+                {explosions
+                  .filter((e) => e.board === "my")
+                  .map((exp) => (
+                    <ExplosionEffect
+                      key={exp.id}
+                      x={exp.x}
+                      y={exp.y}
+                      width={exp.width}
+                      height={exp.height}
+                      onComplete={() =>
+                        setExplosions((prev) =>
+                          prev.filter((e) => e.id !== exp.id),
+                        )
+                      }
+                    />
+                  ))}
               </GameBoard>
             </div>
           </Card>
@@ -814,21 +1113,33 @@ function GamePage() {
 
         {/* Fleet Status */}
         <Card className="flex flex-col gap-3 w-full max-w-4xl p-4">
-          <span className="font-poppins font-semibold text-xs text-white/50 uppercase tracking-widest text-center">Sua Frota</span>
+          <span className="font-poppins font-semibold text-xs text-white/50 uppercase tracking-widest text-center">
+            Sua Frota
+          </span>
           <div className="flex flex-wrap justify-center gap-2">
-            {myFleet.map((ship) => <ShipStatusCard key={ship.type} ship={ship} />)}
+            {myFleet.map((ship) => (
+              <ShipStatusCard key={ship.type} ship={ship} />
+            ))}
           </div>
         </Card>
 
         <Card className="flex flex-col gap-3 w-full max-w-4xl p-4">
-          <span className="font-poppins font-semibold text-xs text-white/50 uppercase tracking-widest text-center">Frota Inimiga</span>
+          <span className="font-poppins font-semibold text-xs text-white/50 uppercase tracking-widest text-center">
+            Frota Inimiga
+          </span>
           <div className="flex flex-wrap justify-center gap-2">
-            {enemyFleet.map((ship) => <ShipStatusCard key={ship.type} ship={ship} isEnemy />)}
+            {enemyFleet.map((ship) => (
+              <ShipStatusCard key={ship.type} ship={ship} isEnemy />
+            ))}
           </div>
         </Card>
 
         {roomId && (
-          <button type="button" onClick={() => setShowLeaveModal(true)} className="flex items-center justify-center gap-2 mx-auto px-4 py-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-all font-poppins text-xs font-medium cursor-pointer">
+          <button
+            type="button"
+            onClick={() => setShowLeaveModal(true)}
+            className="flex items-center justify-center gap-2 mx-auto px-4 py-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-all font-poppins text-xs font-medium cursor-pointer"
+          >
             <LogOut size={14} /> Sair da Partida
           </button>
         )}
