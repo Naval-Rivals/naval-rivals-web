@@ -13,6 +13,7 @@ import ShipPlacementPage from "../pages/ShipPlacementPage";
 import GamePage from "../pages/GamePage";
 import GameResultPage from "../pages/GameResultPage";
 import JoinPage from "../pages/JoinPage";
+import HistoryPage from "../pages/HistoryPage";
 
 function AppRoutes() {
   return (
@@ -80,6 +81,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <RankingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <HistoryPage />
             </ProtectedRoute>
           }
         />

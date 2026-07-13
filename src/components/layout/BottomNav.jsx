@@ -1,4 +1,4 @@
-import { CircleUserRound, House } from "lucide-react";
+import { CircleUserRound, History, House } from "lucide-react";
 import { RankingIcon } from "@phosphor-icons/react";
 import { NavLink } from "react-router";
 
@@ -11,6 +11,9 @@ function BottomNav() {
         </BottomNavItem>
         <BottomNavItem router="/ranking" label="Ranking">
           <RankingIcon size={24} />
+        </BottomNavItem>
+        <BottomNavItem router="/history" label="Histórico">
+          <History size={24} />
         </BottomNavItem>
         <BottomNavItem router="/profile" label="Perfil">
           <CircleUserRound size={24} />

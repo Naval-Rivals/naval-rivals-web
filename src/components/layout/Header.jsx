@@ -1,4 +1,4 @@
-import { CircleUserRound, House } from "lucide-react";
+import { CircleUserRound, History, House } from "lucide-react";
 import NavButton from "../ui/NavButton";
 import { useNavigate } from "react-router";
 import { RankingIcon } from "@phosphor-icons/react";
@@ -21,6 +21,9 @@ function Header({ minimal = false }) {
             </NavButton>
             <NavButton router="/ranking">
               <RankingIcon size={34} />
+            </NavButton>
+            <NavButton router="/history">
+              <History size={34} />
             </NavButton>
             <NavButton router="/profile">
               <CircleUserRound size={34} />
