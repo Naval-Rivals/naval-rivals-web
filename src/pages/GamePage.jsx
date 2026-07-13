@@ -35,7 +35,7 @@ import ShipStatusCard from "../components/game/ShipStatusCard";
 
 const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 const CELL_SIZE = 33;
-const TARGETING_DURATION_MS = 1100;
+const TARGETING_DURATION_MS = 800;
 
 function apiToCell(row, col) {
   return `${COLUMNS[row]}${col + 1}`;
@@ -102,7 +102,12 @@ function GamePage() {
   const [myFleet, setMyFleet] = useState([]);
   const [myShips, setMyShips] = useState([]);
   const myShipsRef = useRef(myShips);
-  const [enemySunkShips, setEnemySunkShips] = useState([]);
+  const [enemySunkShips, setEnemySunkShips] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("enemySunkShips");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [enemyFleet, setEnemyFleet] = useState([]);
   const [opponentNickname, setOpponentNickname] = useState(
     location.state?.opponentNickname ||
@@ -365,6 +370,13 @@ function GamePage() {
     return () => clearInterval(interval);
   }, [disconnected, reconnectTime]);
 
+  // Persist enemy sunk ships to sessionStorage for reload recovery
+  useEffect(() => {
+    if (enemySunkShips.length > 0) {
+      sessionStorage.setItem("enemySunkShips", JSON.stringify(enemySunkShips));
+    }
+  }, [enemySunkShips]);
+
   // --- Board state builder ---
 
   function buildBoardFromState(state) {
@@ -415,13 +427,24 @@ function GamePage() {
       const cellKey = apiToCell(shot.position.row, shot.position.col);
       enemyCells[cellKey] = shot.hit ? "hit" : "miss";
     }
+
+    // Mark sunk cells from persisted enemySunkShips
+    for (const ship of enemySunkShips) {
+      for (const pos of ship.positions) {
+        enemyCells[`${pos.col}${pos.row}`] = "sunk";
+      }
+    }
+
     setEnemyBoard(enemyCells);
+
+    // Build enemy fleet with sunk status from persisted data
+    const sunkTypes = new Set(enemySunkShips.map((s) => s.type));
     setEnemyFleet([
-      { type: "CARRIER", name: "Porta-aviões", size: 5, status: "unknown" },
-      { type: "BATTLESHIP", name: "Navio-tanque", size: 4, status: "unknown" },
-      { type: "CRUISER", name: "Cruzador", size: 3, status: "unknown" },
-      { type: "SUBMARINE", name: "Submarino", size: 3, status: "unknown" },
-      { type: "DESTROYER", name: "Destroyer", size: 2, status: "unknown" },
+      { type: "CARRIER", name: "Porta-aviões", size: 5, status: sunkTypes.has("CARRIER") ? "sunk" : "unknown" },
+      { type: "BATTLESHIP", name: "Navio-tanque", size: 4, status: sunkTypes.has("BATTLESHIP") ? "sunk" : "unknown" },
+      { type: "CRUISER", name: "Cruzador", size: 3, status: sunkTypes.has("CRUISER") ? "sunk" : "unknown" },
+      { type: "SUBMARINE", name: "Submarino", size: 3, status: sunkTypes.has("SUBMARINE") ? "sunk" : "unknown" },
+      { type: "DESTROYER", name: "Destroyer", size: 2, status: sunkTypes.has("DESTROYER") ? "sunk" : "unknown" },
     ]);
   }
 
@@ -650,6 +673,7 @@ function GamePage() {
     sessionStorage.removeItem("roomId");
     sessionStorage.removeItem("opponentNickname");
     sessionStorage.removeItem("gameMode");
+    sessionStorage.removeItem("enemySunkShips");
     subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
     subscriptionsRef.current = [];
     navigate("/game/result", {
@@ -830,6 +854,7 @@ function GamePage() {
       sessionStorage.removeItem("roomId");
       sessionStorage.removeItem("gameMode");
       sessionStorage.removeItem("opponentNickname");
+      sessionStorage.removeItem("enemySunkShips");
       navigate("/", { replace: true });
     } catch (err) {
       setLeaving(false);
