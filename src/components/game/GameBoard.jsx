@@ -55,6 +55,10 @@ const CELL_INDICATORS = {
   ),
 };
 
+// Targeting animation constants
+const TARGETING_STAGGER_MS = 120; // ms delay per cell distance
+const TARGETING_CELL_DURATION_MS = 400; // how long each cell stays lit
+
 /**
  * GameBoard - Tabuleiro 10x10 reutilizável para Naval Rivals
  *
@@ -66,6 +70,7 @@ const CELL_INDICATORS = {
  * - onCellHover: (col, row) => void (opcional) - para radar preview
  * - onCellLeave: () => void (opcional) - para limpar hover
  * - hoverCells: Set ou array de cellKeys para highlight temporário (radar preview)
+ * - targetingCell: { col, row } | null - célula alvo para animação de mira convergente
  * - className: classes adicionais para o container (opcional)
  */
 function GameBoard({
@@ -75,6 +80,7 @@ function GameBoard({
   onCellHover,
   onCellLeave,
   hoverCells,
+  targetingCell,
   className = "",
   children,
 }) {
@@ -84,8 +90,58 @@ function GameBoard({
     return cells[`${col}${row}`] || "empty";
   };
 
+  // Calculate targeting info for a cell
+  const getTargetingInfo = (col, row) => {
+    if (!targetingCell) return null;
+
+    const targetColIdx = COLUMNS.indexOf(targetingCell.col);
+    const targetRowIdx = targetingCell.row - 1;
+    const colIdx = COLUMNS.indexOf(col);
+    const rowIdx = row - 1;
+
+    const isTargetCell = col === targetingCell.col && row === targetingCell.row;
+    const isSameCol = col === targetingCell.col;
+    const isSameRow = row === targetingCell.row;
+
+    if (!isTargetCell && !isSameCol && !isSameRow) return null;
+
+    // Calculate distance from target (used for stagger delay)
+    let distance;
+    if (isTargetCell) {
+      distance = 0;
+    } else if (isSameCol) {
+      distance = Math.abs(rowIdx - targetRowIdx);
+    } else {
+      distance = Math.abs(colIdx - targetColIdx);
+    }
+
+    // Invert: furthest cells animate first (converging inward)
+    const maxDistance = 9;
+    const invertedDelay = (maxDistance - distance) * TARGETING_STAGGER_MS;
+
+    return { isTargetCell, distance, delay: invertedDelay };
+  };
+
   return (
     <div className={`flex flex-col items-center w-full ${className}`}>
+      {/* Targeting CSS keyframes */}
+      {targetingCell && (
+        <style>{`
+          @keyframes targeting-converge {
+            0% { background-color: transparent; }
+            20% { background-color: rgba(239, 68, 68, 0.5); }
+            60% { background-color: rgba(239, 68, 68, 0.4); }
+            100% { background-color: rgba(239, 68, 68, 0); }
+          }
+          @keyframes targeting-center {
+            0% { background-color: transparent; box-shadow: none; }
+            40% { background-color: rgba(239, 68, 68, 0.6); box-shadow: 0 0 12px rgba(239, 68, 68, 0.8); }
+            70% { background-color: rgba(239, 68, 68, 0.8); box-shadow: 0 0 20px rgba(239, 68, 68, 1); }
+            100% { background-color: rgba(239, 68, 68, 0.6); box-shadow: 0 0 16px rgba(239, 68, 68, 0.9); }
+          }
+        `}</style>
+      )}
+
       {/* Header - Letras das colunas */}
       <div className="flex w-full max-w-[360px]">
         <div className="w-6" />
@@ -129,6 +185,24 @@ function GameBoard({
                 const state = getCellState(col, row);
                 const cellKey = `${col}${row}`;
                 const isHovered = hoverSet.has(cellKey);
+                const targeting = getTargetingInfo(col, row);
+
+                // Build targeting style
+                let targetingStyle = {};
+                let targetingClass = "";
+                if (targeting) {
+                  if (targeting.isTargetCell) {
+                    targetingStyle = {
+                      animation: `targeting-center ${TARGETING_CELL_DURATION_MS + 200}ms ease-in ${targeting.delay}ms forwards`,
+                    };
+                    targetingClass = "z-10";
+                  } else {
+                    targetingStyle = {
+                      animation: `targeting-converge ${TARGETING_CELL_DURATION_MS}ms ease-out ${targeting.delay}ms forwards`,
+                    };
+                  }
+                }
+
                 return (
                   <div
                     key={cellKey}
@@ -136,7 +210,8 @@ function GameBoard({
                     onMouseEnter={() => onCellHover?.(col, row)}
                     className={`h-[33px] border border-blue-300/10 flex items-center justify-center transition-colors cursor-pointer hover:bg-blue-300/10 ${CELL_STYLES[state] || CELL_STYLES.empty} ${
                       isHovered ? "bg-green-400/25! border-green-400/40!" : ""
-                    }`}
+                    } ${targetingClass}`}
+                    style={targetingStyle}
                   >
                     {CELL_INDICATORS[state]}
                   </div>
@@ -157,7 +232,7 @@ function GameBoard({
               <SkullOverlay key={`skull-${ship.type}`} ship={ship} />
             ))}
 
-          {/* Extra content (e.g. explosions) */}
+          {/* Extra content (e.g. explosions, shot effects) */}
           {children}
         </div>
       </div>

@@ -91,12 +91,14 @@ function WaitingRoomPage() {
       // we wait for ROOM_READY via WebSocket
     }
 
-    // Force WS close on full page unload (URL change, refresh, close tab)
-    function handleBeforeUnload() {
-      if (isHost && !leftRoomRef.current) {
-        ws.disconnect();
+    // Prevent accidental page close while waiting for opponent
+    function handleBeforeUnload(e) {
+      if (!leftRoomRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
       }
     }
+    window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     // Connect WebSocket and subscribe to room events
