@@ -45,9 +45,9 @@ export function connect({ onConnect, onDisconnect, onError } = {}) {
     reconnectDelay: 5000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
-    debug: (msg) => {
-      console.log("[STOMP]", msg);
-    },
+    // debug: (msg) => {
+    //   // console.log("[STOMP]", msg);
+    // },
     onConnect: () => {
       connected = true;
       currentOnConnect?.();
@@ -63,11 +63,11 @@ export function connect({ onConnect, onDisconnect, onError } = {}) {
     onWebSocketClose: (event) => {
       connected = false;
 
-      console.log("[WS CLOSE]", {
-        code: event.code,
-        reason: event.reason,
-        wasClean: event.wasClean,
-      });
+      // console.log("[WS CLOSE]", {
+      //   code: event.code,
+      //   reason: event.reason,
+      //   wasClean: event.wasClean,
+      // });
       currentOnDisconnect?.();
     },
   });
