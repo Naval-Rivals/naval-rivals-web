@@ -143,6 +143,7 @@ function GamePage() {
   const pendingResultsRef = useRef([]);
   const pendingShipSunkRef = useRef([]);
   const pendingTurnChangeRef = useRef(null);
+  const pendingGameOverRef = useRef(null);
 
   const isMyTurn = currentTurn === user?.id;
   const isTactical = gameMode === "TACTICAL";
@@ -232,6 +233,14 @@ function GamePage() {
       const pendingTC = pendingTurnChangeRef.current;
       pendingTurnChangeRef.current = null;
       executeTurnChange(pendingTC);
+    }
+
+    // If no more animations at all, process pending game over
+    if (shotAnimationsRef.current.length === 0 && pendingGameOverRef.current) {
+      const pendingGO = pendingGameOverRef.current;
+      pendingGameOverRef.current = null;
+      // Small delay so explosion/sunk visuals are visible before navigating
+      setTimeout(() => executeGameOver(pendingGO), 1500);
     }
   }
 
@@ -669,6 +678,18 @@ function GamePage() {
       setOpponentLeft(true);
       return;
     }
+
+    // If shot animations are still running, defer navigation until they finish
+    if (shotAnimationsRef.current.length > 0) {
+      pendingGameOverRef.current = payload;
+      return;
+    }
+
+    // No active animations — add a small delay so last visuals (sunk, explosion) show
+    setTimeout(() => executeGameOver(payload), 1500);
+  }
+
+  function executeGameOver(payload) {
     sessionStorage.removeItem("gameId");
     sessionStorage.removeItem("roomId");
     sessionStorage.removeItem("opponentNickname");
