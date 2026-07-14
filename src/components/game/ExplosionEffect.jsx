@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLottie } from "lottie-react";
 import explosionAnimation from "../../assets/animations/explosion.json";
+import explosionAudio from "../../assets/audio/explosion.mp3";
 
 /**
  * ExplosionEffect - Animação Lottie de explosão posicionada sobre um navio afundado.
@@ -12,8 +13,15 @@ import explosionAnimation from "../../assets/animations/explosion.json";
  * - height: altura da área do navio
  * - onComplete: callback quando a animação terminar
  */
-function ExplosionEffect({ x = 0, y = 0, width = 100, height = 100, onComplete }) {
+function ExplosionEffect({
+  x = 0,
+  y = 0,
+  width = 100,
+  height = 100,
+  onComplete,
+}) {
   const [visible, setVisible] = useState(true);
+  const audioRef = useRef(null);
 
   const { View } = useLottie({
     animationData: explosionAnimation,
@@ -26,6 +34,10 @@ function ExplosionEffect({ x = 0, y = 0, width = 100, height = 100, onComplete }
   });
 
   useEffect(() => {
+    const audio = new Audio(explosionAudio);
+    audio.volume = 0.2;
+    audio.play().catch(() => {});
+    audioRef.current = audio;
     const timer = setTimeout(() => {
       setVisible(false);
       onComplete?.();

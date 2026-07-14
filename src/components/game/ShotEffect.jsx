@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLottie } from "lottie-react";
 import shotAnimation from "../../assets/animations/shot.json";
+import shotAudio from "../../assets/audio/shoot.mp3";
 
 /**
  * ShotEffect - Animação Lottie de tiro posicionada sobre uma célula do tabuleiro.
@@ -12,6 +13,7 @@ import shotAnimation from "../../assets/animations/shot.json";
  */
 function ShotEffect({ x = 0, y = 0, onComplete }) {
   const [visible, setVisible] = useState(true);
+  const audioRef = useRef(null);
 
   const { View } = useLottie({
     animationData: shotAnimation,
@@ -23,13 +25,22 @@ function ShotEffect({ x = 0, y = 0, onComplete }) {
     },
   });
 
-  // Fallback timeout to ensure onComplete fires even if lottie glitches
+  // Play audio using native Audio API (immediate, no loading delay)
   useEffect(() => {
+    const audio = new Audio(shotAudio);
+    audio.volume = 0.3;
+    audio.play().catch(() => {});
+    audioRef.current = audio;
+
     const timer = setTimeout(() => {
       setVisible(false);
       onComplete?.();
     }, 1200);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      audio.pause();
+      audio.currentTime = 0;
+    };
   }, []);
 
   if (!visible) return null;

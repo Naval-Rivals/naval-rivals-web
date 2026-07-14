@@ -19,6 +19,8 @@ import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import Spinner from "../components/ui/Spinner";
+import victoryAudio from "../assets/audio/victory.mp3";
+import defeatAudio from "../assets/audio/defeat.mp3";
 import { Helmet } from "react-helmet-async";
 
 function formatDuration(seconds) {
@@ -60,6 +62,16 @@ function GameResultPage() {
 
     fetchResult();
   }, [gameId]);
+
+  const isVictory = result?.winner?.id === user?.id;
+
+  useEffect(() => {
+    if (!result || !user) return;
+
+    const audio = new Audio(isVictory ? victoryAudio : defeatAudio);
+    audio.volume = 0.4;
+    audio.play().catch(() => {});
+  }, [result, user, isVictory]);
 
   async function handlePlayAgain() {
     setCreatingRoom(true);
@@ -103,7 +115,6 @@ function GameResultPage() {
     );
   }
 
-  const isVictory = result.winner?.id === user?.id;
   const myStats = isVictory ? result.winnerStats : result.loserStats;
   const opponentStats = isVictory ? result.loserStats : result.winnerStats;
   const myData = isVictory ? result.winner : result.loser;
