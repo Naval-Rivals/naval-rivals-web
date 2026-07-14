@@ -35,7 +35,7 @@ import ShipStatusCard from "../components/game/ShipStatusCard";
 
 const COLUMNS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 const CELL_SIZE = 33;
-const TARGETING_DURATION_MS = 800;
+const TARGETING_DURATION_MS = 550;
 
 function apiToCell(row, col) {
   return `${COLUMNS[row]}${col + 1}`;

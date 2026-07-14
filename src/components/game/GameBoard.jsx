@@ -56,8 +56,8 @@ const CELL_INDICATORS = {
 };
 
 // Targeting animation constants
-const TARGETING_STAGGER_MS = 60; // ms delay per cell distance
-const TARGETING_CELL_DURATION_MS = 250; // how long each cell stays lit
+const TARGETING_STAGGER_MS = 40; // ms delay per cell distance
+const TARGETING_CELL_DURATION_MS = 180; // how long each cell stays lit
 
 /**
  * GameBoard - Tabuleiro 10x10 reutilizável para Naval Rivals
