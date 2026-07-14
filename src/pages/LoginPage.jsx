@@ -78,7 +78,7 @@ function LoginPage() {
           </div>
           <div className="flex flex-col w-full items-center gap-2">
             <h3 className="text-xl font-anybody font-extrabold tracking-wide text-orange-300">
-              BEM-VINDO DE VOLTA
+              LOGIN
             </h3>
             <span className="font-poppins font-light text-white">
               Acesse seu comando
