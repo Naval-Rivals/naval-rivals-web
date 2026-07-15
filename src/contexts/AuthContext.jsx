@@ -1,12 +1,49 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router";
 import { auth } from "../services/auth";
 import { ws } from "../services/websocket";
+import { setOnUnauthorized } from "../services/api";
+import { setOnWsUnauthorized } from "../services/websocket";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => auth.getUser());
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  // Flag para evitar múltiplas chamadas simultâneas de sessionExpired
+  const isLoggingOut = useRef(false);
+
+  /**
+   * Chamado quando qualquer requisição HTTP ou WebSocket detecta token inválido/expirado.
+   * Limpa a sessão e redireciona para o login.
+   */
+  const handleSessionExpired = useCallback(() => {
+    if (isLoggingOut.current) return;
+    isLoggingOut.current = true;
+
+    auth.logout();
+    ws.disconnect();
+    setUser(null);
+    navigate("/login", { replace: true });
+
+    // Reset flag após breve delay para permitir novas detecções no futuro
+    setTimeout(() => {
+      isLoggingOut.current = false;
+    }, 1000);
+  }, [navigate]);
+
+  // Registrar os interceptors globais para 401
+  useEffect(() => {
+    setOnUnauthorized(handleSessionExpired);
+    setOnWsUnauthorized(handleSessionExpired);
+
+    return () => {
+      setOnUnauthorized(null);
+      setOnWsUnauthorized(null);
+    };
+  }, [handleSessionExpired]);
 
   useEffect(() => {
     const storedUser = auth.getUser();

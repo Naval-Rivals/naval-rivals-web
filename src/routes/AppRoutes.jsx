@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router";
+import { Route, Routes } from "react-router";
 import ProtectedRoute from "../components/ProtectedRoute";
 import RegisterPage from "../pages/RegisterPage";
 import LoginPage from "../pages/LoginPage";
@@ -17,8 +17,7 @@ import HistoryPage from "../pages/HistoryPage";
 
 function AppRoutes() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <Routes>
         {/* Rotas públicas */}
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -93,7 +92,6 @@ function AppRoutes() {
           }
         />
       </Routes>
-    </BrowserRouter>
   );
 }
 

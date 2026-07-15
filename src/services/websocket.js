@@ -10,6 +10,18 @@ let currentOnConnect = null;
 let currentOnDisconnect = null;
 let currentOnError = null;
 
+// Listener global para interceptar erros de autenticação no WebSocket
+let onWsUnauthorized = null;
+
+/**
+ * Registra um callback que será chamado quando o WebSocket receber erro de autenticação.
+ * Usado pelo AuthContext para limpar sessão e redirecionar ao login.
+ * @param {Function} callback
+ */
+export function setOnWsUnauthorized(callback) {
+  onWsUnauthorized = callback;
+}
+
 /**
  * Connect to the WebSocket server using STOMP protocol.
  * @param {Object} options
@@ -45,9 +57,6 @@ export function connect({ onConnect, onDisconnect, onError } = {}) {
     reconnectDelay: 5000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
-    // debug: (msg) => {
-    //   // console.log("[STOMP]", msg);
-    // },
     onConnect: () => {
       connected = true;
       currentOnConnect?.();
@@ -56,18 +65,33 @@ export function connect({ onConnect, onDisconnect, onError } = {}) {
       connected = false;
       currentOnDisconnect?.();
     },
+    onStompError: (frame) => {
+      // O servidor envia STOMP ERROR quando o token é inválido/expirado
+      const message = frame.headers?.["message"] || "";
+      if (
+        message.toLowerCase().includes("unauthorized") ||
+        message.toLowerCase().includes("401") ||
+        message.toLowerCase().includes("token") ||
+        message.toLowerCase().includes("jwt") ||
+        message.toLowerCase().includes("expired") ||
+        message.toLowerCase().includes("invalid")
+      ) {
+        // Desativar reconnect para não ficar em loop
+        if (client) {
+          client.reconnectDelay = 0;
+          client.deactivate();
+        }
+        connected = false;
+        onWsUnauthorized?.();
+      }
+      currentOnError?.(frame);
+    },
     onWebSocketError: (event) => {
       console.error("[WS ERROR]", event);
       currentOnError?.(event);
     },
     onWebSocketClose: (event) => {
       connected = false;
-
-      // console.log("[WS CLOSE]", {
-      //   code: event.code,
-      //   reason: event.reason,
-      //   wasClean: event.wasClean,
-      // });
       currentOnDisconnect?.();
     },
   });
