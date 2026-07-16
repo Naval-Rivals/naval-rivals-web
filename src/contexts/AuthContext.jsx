@@ -1,4 +1,11 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from "react";
 import { useNavigate } from "react-router";
 import { auth } from "../services/auth";
 import { ws } from "../services/websocket";
@@ -8,8 +15,8 @@ import { setOnWsUnauthorized } from "../services/websocket";
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => auth.getUser());
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   // Flag para evitar múltiplas chamadas simultâneas de sessionExpired
@@ -46,10 +53,25 @@ export function AuthProvider({ children }) {
   }, [handleSessionExpired]);
 
   useEffect(() => {
-    const storedUser = auth.getUser();
-    if (storedUser) {
-      setUser(storedUser);
+    async function restoreSession() {
+      const token = auth.getToken();
+
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const user = await auth.getUser();
+        setUser(user);
+      } catch {
+        auth.logout();
+      } finally {
+        setLoading(false);
+      }
     }
+
+    restoreSession();
   }, []);
 
   async function login({ login: loginValue, password }) {
@@ -80,11 +102,7 @@ export function AuthProvider({ children }) {
   }
 
   function updateUser(data) {
-    setUser((prev) => {
-      const updated = { ...prev, ...data };
-      localStorage.setItem("user", JSON.stringify(updated));
-      return updated;
-    });
+    setUser((prev) => ({ ...prev, ...data }));
   }
 
   function logout() {
@@ -97,7 +115,15 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isAuthenticated, loading, login, register, logout, updateUser }}
+      value={{
+        user,
+        isAuthenticated,
+        loading,
+        login,
+        register,
+        logout,
+        updateUser,
+      }}
     >
       {children}
     </AuthContext.Provider>
