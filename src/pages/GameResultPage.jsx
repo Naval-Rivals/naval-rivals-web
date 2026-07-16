@@ -18,6 +18,7 @@ import {
 import { useNavigate, useLocation } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import { ws } from "../services/websocket";
 import Spinner from "../components/ui/Spinner";
 import victoryAudio from "../assets/audio/victory.mp3";
 import defeatAudio from "../assets/audio/defeat.mp3";
@@ -42,6 +43,9 @@ function GameResultPage() {
   const [creatingRoom, setCreatingRoom] = useState(false);
 
   useEffect(() => {
+    // Game is over — disconnect WebSocket (end of game flow)
+    ws.disconnect();
+
     if (!gameId) {
       navigate("/", { replace: true });
       return;

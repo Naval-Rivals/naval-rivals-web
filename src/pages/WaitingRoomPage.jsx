@@ -220,7 +220,12 @@ function WaitingRoomPage() {
       if (isHost && !leftRoomRef.current) {
         cleanupTimerRef.current = setTimeout(() => {
           api.delete(`/rooms/${room.id}`).catch(() => {});
+          // User left the flow without starting a game — disconnect WS
+          ws.disconnect();
         }, 100);
+      } else if (!leftRoomRef.current) {
+        // Guest left the flow without proceeding to game — disconnect WS
+        ws.disconnect();
       }
     };
   }, []);
@@ -233,6 +238,7 @@ function WaitingRoomPage() {
     } catch {
       // Room might already be deleted, proceed anyway
     }
+    ws.disconnect();
     navigate("/", { replace: true });
   }
 

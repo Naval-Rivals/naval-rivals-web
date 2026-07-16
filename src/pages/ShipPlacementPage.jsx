@@ -85,6 +85,7 @@ function ShipPlacementPage() {
   const location = useLocation();
   const { user } = useAuth();
   const subscriptionsRef = useRef([]);
+  const navigatingToGameRef = useRef(false); // tracks if we're proceeding to GamePage
 
   const gameId = location.state?.gameId;
   const roomId = location.state?.roomId;
@@ -154,6 +155,10 @@ function ShipPlacementPage() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       subscriptionsRef.current.forEach((sub) => sub?.unsubscribe());
       subscriptionsRef.current = [];
+      // Disconnect WS if user left the flow (not navigating to GamePage)
+      if (!navigatingToGameRef.current) {
+        ws.disconnect();
+      }
     };
   }, [gameId]);
 
@@ -163,6 +168,7 @@ function ShipPlacementPage() {
         if (event.playerId !== user?.id) setOpponentReady(true);
         break;
       case "GAME_STARTED":
+        navigatingToGameRef.current = true;
         navigate("/game/play", {
           state: {
             gameId: event.gameId,
@@ -471,6 +477,7 @@ function ShipPlacementPage() {
       sessionStorage.removeItem("gameId");
       sessionStorage.removeItem("roomId");
       sessionStorage.removeItem("gameMode");
+      ws.disconnect();
       navigate("/", { replace: true });
     } catch (err) {
       setAlert({
