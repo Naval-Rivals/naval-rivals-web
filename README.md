@@ -27,7 +27,7 @@ Aplicação web do jogo **Naval Rivals**, uma releitura moderna do clássico Bat
 | **Componentes UI**        | Material UI (MUI)                     | 9.x        |
 | **Roteamento**            | React Router                          | 8.x        |
 | **Formulários**           | React Hook Form + Zod                 | 7.x / 3.x  |
-| **Comunicação Real-time** | STOMP.js (WebSocket)                  | 7.x        |
+| **Comunicação Real-time** | SSE (EventSource) + STOMP.js (WebSocket) | Nativo / 7.x |
 | **Drag & Drop**           | @dnd-kit/react                        | 0.5.x      |
 | **Animações**             | Motion (Framer Motion) + Lottie React | 12.x / 2.x |
 | **Ícones**                | Phosphor Icons + Lucide React         | —          |
@@ -62,6 +62,27 @@ A aplicação segue uma **arquitetura baseada em páginas (page-driven)** com se
 └────────────┴────────────────────────────────────────┘
 ```
 
+### Comunicação Real-time
+
+A aplicação utiliza duas estratégias de comunicação em tempo real, cada uma adequada ao seu contexto:
+
+| Estratégia | Onde é usada | Motivo |
+| ---------- | ------------ | ------ |
+| **SSE (Server-Sent Events)** | Lobby (HomePage) | Notificação unidirecional (server → client). Leve, sem overhead de sessão STOMP, reconexão automática nativa. |
+| **WebSocket (STOMP)** | Waiting Room, Ship Placement, Batalha | Comunicação bidirecional de baixa latência. Necessário para turnos, ataques, habilidades e detecção de desconexão. |
+
+### Ciclo de Vida do WebSocket
+
+O WebSocket **não fica permanentemente conectado**. A conexão é gerenciada sob demanda:
+
+```
+Conecta:    Ao criar ou entrar em uma sala (WaitingRoom)
+Mantém:     WaitingRoom → ShipPlacement → GamePage (fluxo contínuo)
+Desconecta: Ao sair do fluxo (cancelar sala, sair da partida, game over, logout)
+```
+
+Isso garante que usuários navegando no lobby, ranking ou perfil **não consomem recursos de WebSocket** no servidor.
+
 ---
 
 ## Justificativas Técnicas
@@ -74,9 +95,13 @@ Vite garante um ambiente de desenvolvimento rápido, com recarregamento instant�
 
 Estilização utilitária que acelera a construção de interfaces consistentes, sem sair do JSX para escrever CSS separado.
 
-### STOMP.js (WebSocket)
+### SSE para o Lobby
 
-O jogo depende de comunicação em tempo real — turnos, ataques e status de sala precisam refletir instantaneamente para os dois jogadores. STOMP se integra nativamente com o WebSocket do Spring Boot no backend, dispensando soluções externas de sincronização.
+O lobby precisa apenas de uma notificação unidirecional ("lista de salas atualizou") para disparar um re-fetch via REST. SSE é ideal para isso: usa HTTP padrão, reconecta automaticamente sem lógica manual, não exige autenticação (endpoint público), e evita manter uma sessão STOMP inteira só para receber um sinal.
+
+### STOMP.js (WebSocket) para o Jogo
+
+Durante a partida, a comunicação é bidirecional e de baixa latência — turnos, ataques, habilidades, detecção de desconexão e reconexão exigem WebSocket. STOMP se integra nativamente com o Spring Boot no backend.
 
 ### React Hook Form + Zod
 
@@ -118,11 +143,11 @@ src/
 ### Fluxo do Jogo
 
 1. **Registro/Login** — autenticação com JWT
-2. **Lobby** — criação/entrada em sala via código
-3. **Waiting Room** — aguardando oponente (WebSocket)
+2. **Lobby** — criação/entrada em sala via código (atualização real-time via SSE)
+3. **Waiting Room** — aguardando oponente com animações de transição (WebSocket)
 4. **Ship Placement** — posicionamento de navios com drag & drop
 5. **Batalha** — turnos alternados com ataques e habilidades especiais
-6. **Resultado** — tela de vitória/derrota com estatísticas
+6. **Resultado** — tela de vitória/derrota com estatísticas (WebSocket desconecta)
 
 ### Outras Features
 
@@ -167,6 +192,7 @@ VITE_API_BASE=http://localhost:8080
 
 | Variável        | Descrição                                  | Padrão                  |
 | --------------- | ------------------------------------------ | ----------------------- |
-| `VITE_API_BASE` | URL base da API backend (REST + WebSocket) | `http://localhost:8080` |
+| `VITE_API_BASE` | URL base da API backend (REST + WebSocket + SSE) | `http://localhost:8080` |
 
 > O endereço WebSocket é derivado automaticamente substituindo `http` por `ws` e adicionando `/ws`.
+> O endpoint SSE é acessado via `GET {VITE_API_BASE}/lobby/events`.
