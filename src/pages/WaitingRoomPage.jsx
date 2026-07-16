@@ -80,6 +80,8 @@ function WaitingRoomPage() {
         setOpponentFound(true);
         break;
       case "ROOM_READY": {
+        // If immediateGameId is handling the transition, ignore WS event
+        if (leftRoomRef.current) break;
         // If guest is still in "joining" phase, delay ROOM_READY processing
         const readyAt = readyAtRef.current;
         if (readyAt) {
@@ -129,20 +131,14 @@ function WaitingRoomPage() {
       setOpponent(room.host);
       opponentRef.current = room.host.nickname;
       readyAtRef.current = Date.now();
-      // After delay, transition to "opponent found" state
-      timers.push(
-        setTimeout(() => {
-          setGuestJoining(false);
-          setOpponentFound(true);
-        }, GUEST_JOIN_DELAY),
-      );
 
-      // If game was already created (immediateGameId), queue the full transition
+      // If game was already created (immediateGameId), queue the transition:
+      // Phase 1: "Entrando na sala..." (1.8s) → Phase 2: "Preparando batalha..." (2s) → navigate
       if (immediateGameId) {
         leftRoomRef.current = true;
-        // After joining animation completes → show "preparing battle" → navigate
         timers.push(
           setTimeout(() => {
+            setGuestJoining(false);
             setPreparingBattle(true);
             pendingNavigationRef.current = {
               gameId: immediateGameId,
@@ -161,7 +157,16 @@ function WaitingRoomPage() {
                 }
               }, 2000),
             );
-          }, GUEST_JOIN_DELAY + 800),
+          }, GUEST_JOIN_DELAY),
+        );
+      } else {
+        // No immediateGameId — wait for ROOM_READY via WebSocket
+        // Just transition from "joining" to ready state after delay
+        timers.push(
+          setTimeout(() => {
+            setGuestJoining(false);
+            setOpponentFound(true);
+          }, GUEST_JOIN_DELAY),
         );
       }
     } else if (room.opponent) {
