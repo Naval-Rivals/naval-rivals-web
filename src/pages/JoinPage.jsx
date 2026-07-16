@@ -30,12 +30,10 @@ function JoinPage() {
           code: code.toUpperCase(),
         });
         if (room.gameId) {
-          navigate("/game/ship-placement", {
+          navigate("/game/waiting-room", {
             state: {
-              gameId: room.gameId,
-              roomId: room.id,
-              opponentNickname: room.host?.nickname,
-              gameMode: room.gameMode,
+              room,
+              immediateGameId: room.gameId,
             },
             replace: true,
           });
