@@ -18,11 +18,10 @@ import {
   Shield,
   Compass,
 } from "lucide-react";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
-import { ws } from "../services/websocket";
 import logo from "../assets/logo-naval-rivals.png";
 import Footer from "../components/layout/Footer";
 import AlertCard from "../components/ui/AlertCard";
@@ -46,7 +45,6 @@ function HomePage() {
   const [lobbyRooms, setLobbyRooms] = useState([]);
   const [lobbyLoading, setLobbyLoading] = useState(false);
   const [joiningCode, setJoiningCode] = useState(null);
-  const lobbySubRef = useRef(null);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -60,29 +58,27 @@ function HomePage() {
     }
   }, [user?.id]);
 
-  // Fetch rooms + subscribe to lobby WebSocket
+  // Fetch rooms + subscribe to lobby SSE for real-time updates
   useEffect(() => {
     if (!isAuthenticated) return;
 
     setLobbyLoading(true);
     fetchRooms().finally(() => setLobbyLoading(false));
 
-    ws.connect({
-      onConnect: () => {
-        lobbySubRef.current = ws.subscribe("/topic/lobby", (message) => {
-          if (message.event === "LOBBY_UPDATED") {
-            fetchRooms();
-          }
-        });
-        fetchRooms();
-      },
+    const baseUrl = import.meta.env.VITE_API_BASE || "http://localhost:8080";
+    const eventSource = new EventSource(`${baseUrl}/lobby/events`);
+
+    eventSource.addEventListener("LOBBY_UPDATED", () => {
+      fetchRooms();
     });
 
+    eventSource.onerror = () => {
+      // EventSource reconnects automatically — no manual logic needed
+      console.warn("SSE lobby connection lost, reconnecting...");
+    };
+
     return () => {
-      if (lobbySubRef.current) {
-        lobbySubRef.current.unsubscribe();
-        lobbySubRef.current = null;
-      }
+      eventSource.close();
     };
   }, [isAuthenticated, fetchRooms]);
 
