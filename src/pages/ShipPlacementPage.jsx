@@ -148,6 +148,12 @@ function ShipPlacementPage() {
           : null;
 
         subscriptionsRef.current = [subPlacement, subEvents, subRoom].filter(Boolean);
+
+        // Fallback: verify the game still exists (covers timing edge case
+        // where GAME_OVER was published before we subscribed)
+        api.get(`/games/${gameId}/state`).catch(() => {
+          setOpponentLeft(true);
+        });
       },
     });
 
