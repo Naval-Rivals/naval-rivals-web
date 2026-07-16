@@ -40,6 +40,7 @@ function WaitingRoomPage() {
   const opponentRef = useRef(null);
   const pendingNavigationRef = useRef(null);
   const readyAtRef = useRef(null); // timestamp when guest becomes "ready" to receive ROOM_READY
+  const hostFoundAtRef = useRef(null); // timestamp when host sees PLAYER_JOINED
   const guestJoinHandledRef = useRef(false); // prevents duplicate PLAYER_JOINED processing
 
   const room = location.state?.room;
@@ -48,6 +49,7 @@ function WaitingRoomPage() {
   const cleanupTimerRef = useRef(null);
 
   const GUEST_JOIN_DELAY = 1800; // ms - minimum time guest sees "entering room" state
+  const HOST_FOUND_DELAY = 1800; // ms - minimum time host sees "opponent found" state
 
   function processRoomReady(event) {
     leftRoomRef.current = true;
@@ -78,22 +80,27 @@ function WaitingRoomPage() {
         setOpponent({ id: event.userId, nickname: event.nickname });
         opponentRef.current = event.nickname;
         setOpponentFound(true);
+        hostFoundAtRef.current = Date.now();
         break;
       case "ROOM_READY": {
         // If immediateGameId is handling the transition, ignore WS event
         if (leftRoomRef.current) break;
-        // If guest is still in "joining" phase, delay ROOM_READY processing
-        const readyAt = readyAtRef.current;
-        if (readyAt) {
-          const elapsed = Date.now() - readyAt;
-          const remaining = GUEST_JOIN_DELAY - elapsed;
+
+        // Determine minimum delay based on role
+        const foundAt = hostFoundAtRef.current || readyAtRef.current;
+        const minDelay = hostFoundAtRef.current
+          ? HOST_FOUND_DELAY
+          : GUEST_JOIN_DELAY;
+
+        if (foundAt) {
+          const elapsed = Date.now() - foundAt;
+          const remaining = minDelay - elapsed;
           if (remaining > 0) {
             setTimeout(() => processRoomReady(event), remaining);
           } else {
             processRoomReady(event);
           }
         } else {
-          // Host flow — no joining delay needed
           processRoomReady(event);
         }
         break;
