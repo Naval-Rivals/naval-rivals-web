@@ -482,6 +482,9 @@ function GamePage() {
       case "GAME_OVER":
         handleGameOver(payload);
         break;
+      case "GAME_NOT_FOUND":
+        setOpponentLeft(true);
+        break;
       case "OPPONENT_DISCONNECTED":
         if (payload.disconnectedPlayerId !== user?.id) {
           setDisconnected(true);

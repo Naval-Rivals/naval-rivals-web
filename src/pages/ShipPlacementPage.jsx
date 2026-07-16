@@ -199,7 +199,8 @@ function ShipPlacementPage() {
   function handleGameEvent(event) {
     if (
       event.event === "OPPONENT_DISCONNECTED" ||
-      event.event === "GAME_OVER"
+      event.event === "GAME_OVER" ||
+      event.event === "GAME_NOT_FOUND"
     ) {
       setOpponentLeft(true);
     }
