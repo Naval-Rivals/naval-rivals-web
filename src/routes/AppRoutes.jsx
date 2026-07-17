@@ -18,80 +18,88 @@ import HistoryPage from "../pages/HistoryPage";
 function AppRoutes() {
   return (
     <Routes>
-        {/* Rotas públicas */}
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<HomePage />} />
-        <Route path="/about-us" element={<AboutUsPage />} />
-        <Route path="/game/rules" element={<GameRulesPage />} />
-        <Route path="/join/:code" element={<JoinPage />} />
+      {/* Rotas públicas */}
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<HomePage />} />
+      <Route path="/about-us" element={<AboutUsPage />} />
+      <Route path="/game/rules" element={<GameRulesPage />} />
 
-        {/* Rotas protegidas */}
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile/my-account"
-          element={
-            <ProtectedRoute>
-              <MyAccountPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/game/waiting-room"
-          element={
-            <ProtectedRoute>
-              <WaitingRoomPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/game/ship-placement"
-          element={
-            <ProtectedRoute>
-              <ShipPlacementPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/game/play"
-          element={
-            <ProtectedRoute>
-              <GamePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/game/result"
-          element={
-            <ProtectedRoute>
-              <GameResultPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/ranking"
-          element={
-            <ProtectedRoute>
-              <RankingPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/history"
-          element={
-            <ProtectedRoute>
-              <HistoryPage />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
+      {/* Rotas protegidas */}
+      <Route
+        path="/join/:code"
+        element={
+          <ProtectedRoute>
+            <JoinPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile/my-account"
+        element={
+          <ProtectedRoute>
+            <MyAccountPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/waiting-room"
+        element={
+          <ProtectedRoute>
+            <WaitingRoomPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/ship-placement"
+        element={
+          <ProtectedRoute>
+            <ShipPlacementPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/play"
+        element={
+          <ProtectedRoute>
+            <GamePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game/result"
+        element={
+          <ProtectedRoute>
+            <GameResultPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ranking"
+        element={
+          <ProtectedRoute>
+            <RankingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history"
+        element={
+          <ProtectedRoute>
+            <HistoryPage />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
 
